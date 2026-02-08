@@ -26,11 +26,12 @@ chrome-profile/
 pw-profile/
 playwright-profile/
 
-# Node
-node_modules/
+# Node (recursive)
+**/node_modules/
 
-# PID files
+# PID and socket files
 *.pid
+*.sock
 
 # Python
 __pycache__/
@@ -38,6 +39,11 @@ __pycache__/
 *.pyo
 .eggs/
 *.egg-info/
+
+# Setup screenshots and debug artifacts
+gmail-setup/*.png
+gmail-setup/*.txt
+gmail-setup/*.log
 
 # macOS
 .DS_Store
