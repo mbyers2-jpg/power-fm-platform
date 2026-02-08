@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}Deal Tracker — {{ deal.name }}{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">&larr; Back to Pipeline</a>
+
+<div class="page-header" style="display: flex; align-items: flex-start; justify-content: space-between;">
+    <div>
+        <h1>{{ deal.name }}</h1>
+        <div class="subtitle" style="display: flex; gap: 12px; align-items: center; margin-top: 8px;">
+            <span class="badge badge-{{ stage_colors.get(deal.stage, 'blue') }}">{{ stage_labels.get(deal.stage, deal.stage) }}</span>
+            <span class="badge badge-{{ status_colors.get(deal.status, 'blue') }}">{{ deal.status|replace('_', ' ')|upper }}</span>
+            {% if deal.priority and deal.priority != 'medium' %}
+            <span class="badge badge-{{ priority_colors.get(deal.priority, 'yellow') }}">{{ deal.priority|upper }}</span>
+            {% endif %}
+            {% if deal.is_stale %}
+            <span class="badge badge-red">STALE {{ deal.days_stale }}d</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="stats-row" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
+    <div class="stat-card">
+        <div class="label">Documents</div>
+        <div class="value accent">{{ documents|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Contacts</div>
+        <div class="value purple">{{ contacts|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Milestones</div>
+        <div class="value green">{{ completed_milestones }}/{{ total_milestones }}</div>
+        {% if total_milestones > 0 %}
+        <div class="progress-bar" style="margin-top: 8px;">
+            <div class="fill fill-green" style="width: {{ milestone_pct }}%;"></div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="stat-card">
+        <div class="label">Days Since Activity</div>
+        <div class="value {% if deal.days_stale >= 30 %}red{% elif deal.days_stale >= 14 %}yellow{% else %}green{% endif %}">
+            {{ deal.days_stale if deal.days_stale < 999 else '?' }}
+        </div>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <!-- Main Content -->
+    <div>
+        <!-- Deal Info Card -->
+        <div class="card">
+            <div class="card-header">
+                <span>Deal Information</span>
+                <button class="btn btn-sm" onclick="toggleEditForm()">Edit</button>
+            </div>
+            <div class="card-body">
+                <div class="grid-2">
+                    <div class="detail-field">
+                        <div class="field-label">Entity</div>
+                        <div class="field-value">{{ deal.entity or '-' }}</div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Counterparty</div>
+                        <div class="field-value">{{ deal.counterparty or '-' }}</div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Counterparty Email</div>
+                        <div class="field-value">
+                            {% if deal.counterparty_email %}
+                            <a href="mailto:{{ deal.counterparty_email }}">{{ deal.counterparty_email }}</a>
+                            {% else %}-{% endif %}
+                        </div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Deal Type</div>
+                        <div class="field-value">{{ deal.deal_type or '-' }}</div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Value Estimate</div>
+                        <div class="field-value">{{ deal.value_estimate or '-' }}</div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Start Date</div>
+                        <div class="field-value">{{ deal.start_date or '-' }}</div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Last Activity</div>
+                        <div class="field-value">{{ deal.last_activity[:10] if deal.last_activity else '-' }}</div>
+                    </div>
+                    <div class="detail-field">
+                        <div class="field-label">Folder Path</div>
+                        <div class="field-value mono" style="font-size: 12px; word-break: break-all;">
+                            {{ deal.folder_path.replace('/Users/marcbyers', '~') if deal.folder_path else '-' }}
+                        </div>
+                    </div>
+                </div>
+                {% if deal.next_action %}
+                <div class="detail-field" style="margin-top: 12px;">
+                    <div class="field-label">Next Action</div>
+                    <div class="field-value" style="display: flex; gap: 12px; align-items: center;">
+                        <span>{{ deal.next_action }}</span>
+                        {% if deal.next_action_date %}
+                        <span class="badge badge-yellow">Due: {{ deal.next_action_date }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if deal.notes %}
+                <div class="detail-field" style="margin-top: 12px;">
+                    <div class="field-label">Notes</div>
+                    <div class="field-value" style="white-space: pre-wrap; font-size: 13px;">{{ deal.notes }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Edit Form (hidden by default) -->
+        <div class="card" id="editForm" style="display: none;">
+            <div class="card-header">Edit Deal</div>
+            <div class="card-body">
+                <form method="POST" action="/deal/{{ deal.id }}/edit">
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" name="name" class="form-control" value="{{ deal.name }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Entity</label>
+                            <input type="text" name="entity" class="form-control" value="{{ deal.entity or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Counterparty</label>
+                            <input type="text" name="counterparty" class="form-control" value="{{ deal.counterparty or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Counterparty Email</label>
+                            <input type="email" name="counterparty_email" class="form-control" value="{{ deal.counterparty_email or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Deal Type</label>
+                            <input type="text" name="deal_type" class="form-control" value="{{ deal.deal_type or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="status" class="form-control">
+                                <option value="active" {% if deal.status == 'active' %}selected{% endif %}>Active</option>
+                                <option value="closed_won" {% if deal.status == 'closed_won' %}selected{% endif %}>Closed (Won)</option>
+                                <option value="closed_lost" {% if deal.status == 'closed_lost' %}selected{% endif %}>Closed (Lost)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Stage</label>
+                            <select name="stage" class="form-control">
+                                <option value="prospect" {% if deal.stage == 'prospect' %}selected{% endif %}>Prospect</option>
+                                <option value="negotiation" {% if deal.stage == 'negotiation' %}selected{% endif %}>Negotiation</option>
+                                <option value="contract" {% if deal.stage == 'contract' %}selected{% endif %}>Contract</option>
+                                <option value="signed" {% if deal.stage == 'signed' %}selected{% endif %}>Signed</option>
+                                <option value="active" {% if deal.stage == 'active' %}selected{% endif %}>Active</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Priority</label>
+                            <select name="priority" class="form-control">
+                                <option value="low" {% if deal.priority == 'low' %}selected{% endif %}>Low</option>
+                                <option value="medium" {% if deal.priority == 'medium' %}selected{% endif %}>Medium</option>
+                                <option value="high" {% if deal.priority == 'high' %}selected{% endif %}>High</option>
+                                <option value="critical" {% if deal.priority == 'critical' %}selected{% endif %}>Critical</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Value Estimate</label>
+                            <input type="text" name="value_estimate" class="form-control" value="{{ deal.value_estimate or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Start Date</label>
+                            <input type="date" name="start_date" class="form-control" value="{{ deal.start_date or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Next Action</label>
+                            <input type="text" name="next_action" class="form-control" value="{{ deal.next_action or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Next Action Date</label>
+                            <input type="date" name="next_action_date" class="form-control" value="{{ deal.next_action_date or '' }}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea name="notes" class="form-control">{{ deal.notes or '' }}</textarea>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn" onclick="toggleEditForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Milestones -->
+        <div class="card">
+            <div class="card-header">
+                <span>Milestones ({{ completed_milestones }}/{{ total_milestones }})</span>
+            </div>
+            <div class="card-body">
+                {% if milestones %}
+                {% for m in milestones %}
+                <div class="milestone-item">
+                    <div class="milestone-status {% if m.status == 'completed' %}completed{% endif %}"></div>
+                    <div class="milestone-info">
+                        <div class="milestone-title {% if m.status == 'completed' %}completed{% endif %}">{{ m.title }}</div>
+                        {% if m.description %}
+                        <div class="milestone-desc">{{ m.description }}</div>
+                        {% endif %}
+                        {% if m.due_date %}
+                        <div class="milestone-due {% if m.status != 'completed' and m.due_date < now[:10] %}overdue{% endif %}">
+                            {% if m.status == 'completed' %}
+                            Completed: {{ m.completed_date[:10] if m.completed_date else 'Done' }}
+                            {% elif m.due_date < now[:10] %}
+                            OVERDUE (due {{ m.due_date }})
+                            {% else %}
+                            Due: {{ m.due_date }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if m.status != 'completed' %}
+                    <form method="POST" action="/deal/{{ deal.id }}/milestone/{{ m.id }}/complete">
+                        <button type="submit" class="btn btn-success btn-sm">Complete</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state" style="padding: 20px;">
+                    <p>No milestones set for this deal.</p>
+                </div>
+                {% endif %}
+
+                <!-- Add Milestone Form -->
+                <div style="border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px;">
+                    <form method="POST" action="/deal/{{ deal.id }}/milestone" style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="margin-bottom: 0; flex: 2;">
+                            <label>Add Milestone</label>
+                            <input type="text" name="title" class="form-control" placeholder="Milestone title" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; flex: 1;">
+                            <label>Due Date</label>
+                            <input type="date" name="due_date" class="form-control">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; flex: 2;">
+                            <label>Description</label>
+                            <input type="text" name="description" class="form-control" placeholder="Optional description">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm" style="margin-bottom: 0;">Add</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documents -->
+        <div class="card">
+            <div class="card-header">Documents ({{ documents|length }})</div>
+            <div class="card-body" style="padding: 0;">
+                {% if documents %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Added</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documents %}
+                        <tr>
+                            <td class="mono" style="font-size: 12px; word-break: break-all;">
+                                {{ doc.file_path.split('/')[-1] if doc.file_path else '-' }}
+                            </td>
+                            <td>
+                                {% if doc.file_type %}
+                                <span class="badge badge-blue">{{ doc.file_type }}</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>{{ doc.description or '-' }}</td>
+                            <td class="mono">{{ doc.added_at[:10] if doc.added_at else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state" style="padding: 20px;">
+                    <p>No documents linked to this deal.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div>
+        <!-- Stage Quick-Update -->
+        <div class="card">
+            <div class="card-header">Move Stage</div>
+            <div class="card-body">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    {% for stage in ['prospect', 'negotiation', 'contract', 'signed', 'active'] %}
+                    <form method="POST" action="/deal/{{ deal.id }}/stage" style="margin: 0;">
+                        <input type="hidden" name="stage" value="{{ stage }}">
+                        <button type="submit" class="btn {% if deal.stage == stage %}btn-primary{% endif %}" style="width: 100%; justify-content: flex-start;">
+                            {% if deal.stage == stage %}&bull;{% endif %}
+                            {{ stage_labels.get(stage, stage) }}
+                        </button>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Contacts -->
+        <div class="card">
+            <div class="card-header">Contacts ({{ contacts|length }})</div>
+            <div class="card-body">
+                {% for c in contacts %}
+                <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+                    <div style="font-weight: 600; font-size: 14px;">{{ c.contact_name or 'Unknown' }}</div>
+                    {% if c.contact_email %}
+                    <div style="font-size: 13px;">
+                        <a href="mailto:{{ c.contact_email }}">{{ c.contact_email }}</a>
+                    </div>
+                    {% endif %}
+                    {% if c.role %}
+                    <div style="font-size: 12px; color: var(--text-dim);">{{ c.role }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not contacts %}
+                <div style="text-align: center; padding: 8px; color: var(--text-dim); font-size: 13px;">
+                    No contacts linked
+                </div>
+                {% endif %}
+
+                <!-- Add Contact Form -->
+                <div style="border-top: 1px solid var(--border); margin-top: 8px; padding-top: 12px;">
+                    <form method="POST" action="/deal/{{ deal.id }}/contact">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" name="contact_name" class="form-control" placeholder="Contact name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" name="contact_email" class="form-control" placeholder="email@example.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <input type="text" name="role" class="form-control" placeholder="e.g. Legal, A&R, Manager">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;">Add Contact</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Deals Navigation -->
+        <div class="card">
+            <div class="card-header">All Deals</div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto; padding: 8px 12px;">
+                {% for d in all_deals %}
+                <div style="padding: 4px 0;">
+                    <a href="/deal/{{ d.id }}" style="font-size: 13px; {% if d.id == deal.id %}color: var(--text); font-weight: 600;{% endif %}">
+                        {% if d.id == deal.id %}&bull; {% endif %}{{ d.name }}
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEditForm() {
+    const form = document.getElementById('editForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'block') {
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+</script>
+{% endblock %}

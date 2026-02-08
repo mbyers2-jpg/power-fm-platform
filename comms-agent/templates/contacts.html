@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Contacts{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Contacts</h1>
+</div>
+
+<!-- ===== Stats ===== -->
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="label">Total Contacts</div>
+        <div class="value">{{ "{:,}".format(total_contacts) }}</div>
+    </div>
+    {% for cat, cnt in cat_counts.items() %}
+    {% if loop.index <= 4 %}
+    <div class="stat-card">
+        <div class="label">{{ cat or 'Uncategorized' }}</div>
+        <div class="value">{{ "{:,}".format(cnt) }}</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- ===== Search & Sort ===== -->
+<form class="filter-bar" method="GET" action="{{ url_for('contacts') }}">
+    <input type="search" name="q" value="{{ search }}" placeholder="Search contacts by name, email, or org..." class="search-input">
+    <label>Sort:</label>
+    <select name="sort" onchange="this.form.submit()">
+        <option value="email_count" {% if sort == 'email_count' %}selected{% endif %}>Most Emails</option>
+        <option value="last_contact" {% if sort == 'last_contact' %}selected{% endif %}>Most Recent</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-accent">Search</button>
+</form>
+
+<!-- ===== Contacts Table ===== -->
+<div class="card">
+    <div class="card-header">
+        {% if search %}
+        Results for "{{ search }}" ({{ contacts|length }})
+        {% else %}
+        Top Contacts ({{ contacts|length }})
+        {% endif %}
+    </div>
+    <div class="card-body no-pad">
+        {% if contacts %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Organization</th>
+                    <th>Category</th>
+                    <th>Emails</th>
+                    <th>First Contact</th>
+                    <th>Last Contact</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for c in contacts %}
+                <tr>
+                    <td>{{ c.name or '-' }}</td>
+                    <td class="mono text-sm">{{ c.email }}</td>
+                    <td class="text-sm">{{ c.organization or '-' }}</td>
+                    <td>
+                        {% if c.category %}
+                        <span class="badge badge-normal">{{ c.category }}</span>
+                        {% else %}
+                        <span class="text-dim">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-accent" style="font-weight: 600;">{{ c.email_count }}</td>
+                    <td class="text-dim text-xs">{{ c.first_contact[:10] if c.first_contact else '-' }}</td>
+                    <td class="text-dim text-xs">{{ c.last_contact[:10] if c.last_contact else '-' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-title">No contacts found</div>
+            {% if search %}
+            <p class="text-dim text-sm">Try a different search term.</p>
+            {% else %}
+            <p class="text-dim text-sm">Email database may not be populated yet.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

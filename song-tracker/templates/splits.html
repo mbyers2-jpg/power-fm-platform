@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Rights Holders &amp; Splits — Song Tracker{% endblock %}
+
+{% block nav_extra %}
+<a href="/splits" class="nav-link active">Splits</a>
+<a href="/imports" class="nav-link">Imports</a>
+<a href="/analytics" class="nav-link">Analytics</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Rights Holders &amp; Splits</h1>
+    <div class="subtitle">Manage ownership, writer credits, and revenue splits for every song</div>
+</div>
+
+{% with messages = get_flashed_messages() %}
+{% if messages %}
+<div style="background: rgba(63,185,80,.12); border: 1px solid var(--green); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; color: var(--green); font-size: 14px;">
+    {% for msg in messages %}{{ msg }}<br>{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Total Songs</div>
+        <div class="value accent">{{ song_splits|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Songs with Splits</div>
+        <div class="value green">{{ song_splits|selectattr('holders')|list|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Songs Missing Splits</div>
+        <div class="value" style="color: var(--yellow);">{{ song_splits|rejectattr('holders')|list|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Unique Rights Holders</div>
+        <div class="value purple">{{ all_holders|length }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Add to single song -->
+    <div class="card">
+        <div class="card-header">Add Rights Holder to Song</div>
+        <div class="card-body">
+            <form method="POST" action="/splits/add" class="form-grid">
+                <div class="form-row">
+                    <label>Song</label>
+                    <select name="song_id" required class="form-input">
+                        {% for ss in song_splits %}
+                        <option value="{{ ss.song.id }}">{{ ss.song.title }} — {{ ss.song.artist }}{% if ss.complete %} ✓{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Name</label>
+                    <input type="text" name="name" required class="form-input" placeholder="e.g. Marc Byers">
+                </div>
+                <div class="form-row-2col">
+                    <div>
+                        <label>Role</label>
+                        <select name="role" required class="form-input">
+                            <option value="writer">Writer</option>
+                            <option value="producer">Producer</option>
+                            <option value="performer">Performer</option>
+                            <option value="publisher">Publisher</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Split %</label>
+                        <input type="number" name="split_pct" required class="form-input" min="0" max="100" step="0.1" placeholder="50.0">
+                    </div>
+                </div>
+                <div class="form-row-2col">
+                    <div>
+                        <label>PRO</label>
+                        <select name="pro" class="form-input">
+                            <option value="">— None —</option>
+                            <option value="ASCAP">ASCAP</option>
+                            <option value="BMI">BMI</option>
+                            <option value="SESAC">SESAC</option>
+                            <option value="SOCAN">SOCAN</option>
+                            <option value="PRS">PRS</option>
+                            <option value="GEMA">GEMA</option>
+                            <option value="SACEM">SACEM</option>
+                            <option value="SoundExchange">SoundExchange</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Publisher</label>
+                        <input type="text" name="publisher" class="form-input" placeholder="e.g. Protect The Culture">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Publisher Split % (of this holder's share)</label>
+                    <input type="number" name="pub_split_pct" class="form-input" min="0" max="100" step="0.1" value="0">
+                </div>
+                <button type="submit" class="btn btn-primary">Add Rights Holder</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk add -->
+    <div class="card">
+        <div class="card-header">Bulk Add — Same Holder to Multiple Songs</div>
+        <div class="card-body">
+            <form method="POST" action="/splits/bulk" class="form-grid">
+                <div class="form-row">
+                    <label>Select Songs</label>
+                    <div class="checkbox-grid">
+                        {% for ss in song_splits %}
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="song_ids" value="{{ ss.song.id }}">
+                            <span>{{ ss.song.title }} ({{ ss.song.artist }})</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Name</label>
+                    <input type="text" name="name" required class="form-input" placeholder="e.g. Marc Byers">
+                </div>
+                <div class="form-row-2col">
+                    <div>
+                        <label>Role</label>
+                        <select name="role" required class="form-input">
+                            <option value="writer">Writer</option>
+                            <option value="producer">Producer</option>
+                            <option value="performer">Performer</option>
+                            <option value="publisher">Publisher</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Split %</label>
+                        <input type="number" name="split_pct" required class="form-input" min="0" max="100" step="0.1" placeholder="50.0">
+                    </div>
+                </div>
+                <div class="form-row-2col">
+                    <div>
+                        <label>PRO</label>
+                        <select name="pro" class="form-input">
+                            <option value="">— None —</option>
+                            <option value="ASCAP">ASCAP</option>
+                            <option value="BMI">BMI</option>
+                            <option value="SESAC">SESAC</option>
+                            <option value="SoundExchange">SoundExchange</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Publisher</label>
+                        <input type="text" name="publisher" class="form-input" placeholder="">
+                    </div>
+                </div>
+                <input type="hidden" name="pub_split_pct" value="0">
+                <button type="submit" class="btn btn-primary">Add to Selected Songs</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Existing Rights Holders -->
+{% if all_holders %}
+<div class="card">
+    <div class="card-header">All Rights Holders</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>PRO</th>
+                    <th>Publisher</th>
+                    <th class="text-center">Songs</th>
+                    <th class="text-right">Avg Split</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in all_holders %}
+                <tr>
+                    <td style="font-weight: 600;">{{ h.name }}</td>
+                    <td><span class="badge badge-blue">{{ h.role }}</span></td>
+                    <td>{{ h.pro or '—' }}</td>
+                    <td>{{ h.publisher or '—' }}</td>
+                    <td class="text-center">{{ h.song_count }}</td>
+                    <td class="text-right mono">{{ "%.1f"|format(h.avg_split) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Per-Song Splits -->
+<div class="card">
+    <div class="card-header">
+        <span>Splits by Song</span>
+        <input type="text" class="search-box" id="splitSearch" placeholder="Search..." oninput="filterSplits()">
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% for ss in song_splits %}
+        <div class="split-song-row" data-search="{{ ss.song.title|lower }} {{ ss.song.artist|lower }}">
+            <div class="split-song-header">
+                <div>
+                    <a href="/song/{{ ss.song.id }}" style="font-weight: 600;">{{ ss.song.title }}</a>
+                    <span style="color: var(--text-dim);"> — {{ ss.song.artist }}</span>
+                </div>
+                <div>
+                    {% if ss.complete %}
+                    <span class="badge badge-green">100%</span>
+                    {% elif ss.holders %}
+                    <span class="badge badge-yellow">{{ "%.0f"|format(ss.total_pct) }}%</span>
+                    {% else %}
+                    <span class="badge badge-red">No Splits</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if ss.holders %}
+            <table style="margin: 0;">
+                <tbody>
+                    {% for h in ss.holders %}
+                    <tr>
+                        <td style="padding-left: 24px;">{{ h.name }}</td>
+                        <td><span class="badge badge-blue">{{ h.role }}</span></td>
+                        <td class="mono">{{ "%.1f"|format(h.split_pct) }}%</td>
+                        <td>{{ h.pro or '' }}</td>
+                        <td>{{ h.publisher or '' }}</td>
+                        <td class="text-right">
+                            <form method="POST" action="/splits/delete/{{ h.id }}" style="display:inline;">
+                                <button type="submit" class="btn-sm btn-danger" onclick="return confirm('Remove this rights holder?')">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .form-grid { display: flex; flex-direction: column; gap: 12px; }
+    .form-row label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 4px; }
+    .form-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-row-2col label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 4px; }
+    .form-input {
+        width: 100%;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 12px;
+        color: var(--text);
+        font-size: 14px;
+    }
+    .form-input:focus { outline: none; border-color: var(--accent); }
+    select.form-input { cursor: pointer; }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #79b8ff; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); border-radius: 4px; cursor: pointer; }
+    .btn-danger:hover { border-color: var(--red); color: var(--red); }
+    .checkbox-grid { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; padding: 2px 0; }
+    .checkbox-label input { accent-color: var(--accent); }
+    .split-song-row { border-bottom: 1px solid var(--border); }
+    .split-song-row:last-child { border-bottom: none; }
+    .split-song-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+</style>
+
+<script>
+function filterSplits() {
+    const q = document.getElementById('splitSearch').value.toLowerCase();
+    document.querySelectorAll('.split-song-row').forEach(row => {
+        row.style.display = row.dataset.search.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

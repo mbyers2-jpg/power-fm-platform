@@ -1,0 +1,14 @@
+{
+  "name": "ribbon-sfu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ribbon mediasoup SFU",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mediasoup": "^3.14.0",
+    "ws": "^8.18.0"
+  }
+}

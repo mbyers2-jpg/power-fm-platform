@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <span class="text-dim text-sm">Last refreshed: {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+</div>
+
+<!-- ===== Stat Cards ===== -->
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="label">Total Emails</div>
+        <div class="value">{{ "{:,}".format(email_stats.total) }}</div>
+        <div class="sub">{{ "{:,}".format(email_stats.unread) }} unread</div>
+        {% if email_stats.accounts %}
+        <div class="text-dim text-xs" style="margin-top:4px;">
+            {% for a in email_stats.accounts %}
+            <span class="badge badge-{{ 'gmail' if a.source == 'gmail' else 'ms365' }}" style="font-size:10px;">
+                {{ a.source|upper }}: {{ "{:,}".format(a.cnt) }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="stat-card">
+        <div class="label">Pending Follow-ups</div>
+        <div class="value" style="color: var(--yellow);">{{ pending_followups|length }}</div>
+        <div class="sub">{{ overdue|length }} overdue</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Draft Responses</div>
+        <div class="value" style="color: var(--purple);">{{ pending_drafts|length }}</div>
+        <div class="sub">{{ sent_drafts }} sent of {{ total_drafts }} total</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Follow-ups Completed</div>
+        <div class="value" style="color: var(--green);">{{ completed_followups }}</div>
+        <div class="sub">of {{ total_followups }} total</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">With Attachments</div>
+        <div class="value">{{ "{:,}".format(email_stats.has_attachment) }}</div>
+        <div class="sub">emails with files</div>
+    </div>
+</div>
+
+<!-- ===== Charts Row ===== -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Email Categories</div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="catChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Email Volume (30 days)</div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="timelineChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Overdue Follow-ups Alert ===== -->
+{% if overdue %}
+<div class="card" style="border-color: var(--red);">
+    <div class="card-header" style="color: var(--red);">
+        Overdue Follow-ups ({{ overdue|length }})
+        <a href="{{ url_for('follow_ups') }}" class="btn btn-sm">View All</a>
+    </div>
+    <div class="card-body no-pad">
+        <table>
+            <thead>
+                <tr>
+                    <th>Contact</th>
+                    <th>Subject</th>
+                    <th>Priority</th>
+                    <th>Due Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for f in overdue[:5] %}
+                <tr>
+                    <td>
+                        <div>{{ f.contact_name or 'Unknown' }}</div>
+                        <div class="text-dim text-xs">{{ f.contact_email }}</div>
+                    </td>
+                    <td>{{ f.subject or '(no subject)' }}</td>
+                    <td><span class="badge badge-{{ f.priority }}">{{ f.priority }}</span></td>
+                    <td class="text-red text-sm">{{ f.due_date }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('complete_follow_up', item_id=f.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-green">Complete</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- ===== Action Items & Priority Emails ===== -->
+<div class="grid-2">
+    <!-- Action Items -->
+    <div class="card">
+        <div class="card-header">
+            Pending Action Items ({{ action_items|length }})
+        </div>
+        <div class="card-body no-pad">
+            {% if action_items %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Priority</th>
+                        <th>Due</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for a in action_items[:10] %}
+                    <tr>
+                        <td class="text-sm">{{ a.description }}</td>
+                        <td><span class="badge badge-{{ a.priority }}">{{ a.priority }}</span></td>
+                        <td class="text-dim text-sm">{{ a.due_date or '-' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty">
+                <div class="empty-title">No pending action items</div>
+                <p class="text-dim text-sm">All caught up.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Priority Emails -->
+    <div class="card">
+        <div class="card-header">Recent Emails</div>
+        <div class="card-body no-pad">
+            {% if email_stats.recent %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>From</th>
+                        <th>Subject</th>
+                        <th>Category</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for e in email_stats.recent[:10] %}
+                    <tr>
+                        <td>
+                            <div class="text-sm">{{ e.sender or e.sender_email }}</div>
+                            {% if e.source == 'microsoft365' %}
+                            <span class="badge badge-ms365" style="font-size:9px;">M365</span>
+                            {% else %}
+                            <span class="badge badge-gmail" style="font-size:9px;">Gmail</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="text-sm">{{ e.subject or '(no subject)' }}</div>
+                            <div class="snippet">{{ e.snippet or '' }}</div>
+                        </td>
+                        <td>
+                            {% if e.importance == 'critical' %}
+                            <span class="badge badge-critical">{{ e.category }}</span>
+                            {% elif e.importance == 'high' %}
+                            <span class="badge badge-high">{{ e.category }}</span>
+                            {% else %}
+                            <span class="badge badge-normal">{{ e.category }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty">
+                <div class="empty-title">No emails found</div>
+                <p class="text-dim text-sm">Email database may not be populated yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ===== Pending Follow-ups Preview ===== -->
+<div class="card">
+    <div class="card-header">
+        Pending Follow-ups ({{ pending_followups|length }})
+        <a href="{{ url_for('follow_ups') }}" class="btn btn-sm btn-accent">View All</a>
+    </div>
+    <div class="card-body no-pad">
+        {% if pending_followups %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Contact</th>
+                    <th>Subject</th>
+                    <th>Reason</th>
+                    <th>Priority</th>
+                    <th>Due</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for f in pending_followups[:8] %}
+                <tr>
+                    <td>
+                        <div>{{ f.contact_name or 'Unknown' }}</div>
+                        <div class="text-dim text-xs">{{ f.contact_email }}</div>
+                    </td>
+                    <td class="text-sm">{{ f.subject or '(no subject)' }}</td>
+                    <td class="snippet">{{ f.reason or '' }}</td>
+                    <td><span class="badge badge-{{ f.priority }}">{{ f.priority }}</span></td>
+                    <td class="text-dim text-sm">{{ f.due_date or '-' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-title">No pending follow-ups</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHART_COLORS = [
+    '#58a6ff', '#3fb950', '#d29922', '#f85149', '#bc8cff',
+    '#f0883e', '#79c0ff', '#56d364', '#e3b341', '#ff7b72'
+];
+
+// -- Category Doughnut Chart --
+fetch('/api/email-categories')
+    .then(r => r.json())
+    .then(data => {
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+        new Chart(document.getElementById('catChart'), {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: CHART_COLORS.slice(0, labels.length),
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#8b949e', padding: 12, font: { size: 12 } }
+                    }
+                },
+                cutout: '60%',
+            }
+        });
+    });
+
+// -- Timeline Bar Chart --
+fetch('/api/email-timeline')
+    .then(r => r.json())
+    .then(data => {
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+        new Chart(document.getElementById('timelineChart'), {
+            type: 'bar',
+            data: {
+                labels: labels.map(d => d.slice(5)),  // show MM-DD
+                datasets: [{
+                    label: 'Emails',
+                    data: values,
+                    backgroundColor: '#58a6ff',
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        ticks: { color: '#8b949e', font: { size: 10 }, maxRotation: 45 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        ticks: { color: '#8b949e', font: { size: 11 } },
+                        grid: { color: '#30363d' }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

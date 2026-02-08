@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Draft #{{ draft.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Draft #{{ draft.id }}</h1>
+    <a href="{{ url_for('drafts') }}" class="btn btn-sm">Back to Drafts</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="badge badge-{{ draft.status }}">{{ draft.status|replace('_', ' ') }}</span>
+        <span class="text-dim text-sm">Created: {{ draft.created_at or '-' }}</span>
+    </div>
+    <div class="card-body">
+        <table style="margin-bottom: 20px;">
+            <tr>
+                <td class="text-dim text-sm" style="width: 120px; padding: 6px 16px;">To</td>
+                <td style="padding: 6px 16px;">{{ draft.to_address or '-' }}</td>
+            </tr>
+            <tr>
+                <td class="text-dim text-sm" style="padding: 6px 16px;">Subject</td>
+                <td style="padding: 6px 16px;">{{ draft.subject or '(no subject)' }}</td>
+            </tr>
+            <tr>
+                <td class="text-dim text-sm" style="padding: 6px 16px;">Type</td>
+                <td style="padding: 6px 16px;">{{ draft.draft_type or '-' }}</td>
+            </tr>
+            <tr>
+                <td class="text-dim text-sm" style="padding: 6px 16px;">Thread ID</td>
+                <td class="mono" style="padding: 6px 16px;">{{ draft.thread_id or '-' }}</td>
+            </tr>
+            {% if draft.sent_at %}
+            <tr>
+                <td class="text-dim text-sm" style="padding: 6px 16px;">Sent At</td>
+                <td style="padding: 6px 16px;">{{ draft.sent_at }}</td>
+            </tr>
+            {% endif %}
+        </table>
+
+        <div class="text-dim text-xs" style="margin-bottom: 8px;">DRAFT BODY</div>
+        <div class="draft-preview" style="max-height: none;">{{ draft.body or '(empty)' }}</div>
+    </div>
+</div>
+{% endblock %}

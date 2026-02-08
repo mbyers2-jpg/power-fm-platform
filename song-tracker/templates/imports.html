@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Import Data — Song Tracker{% endblock %}
+
+{% block nav_extra %}
+<a href="/splits" class="nav-link">Splits</a>
+<a href="/imports" class="nav-link active">Imports</a>
+<a href="/analytics" class="nav-link">Analytics</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Import Data</h1>
+    <div class="subtitle">Upload streaming, royalty, and distribution data from your platforms</div>
+</div>
+
+{% with messages = get_flashed_messages() %}
+{% if messages %}
+<div style="background: rgba(63,185,80,.12); border: 1px solid var(--green); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; color: var(--green); font-size: 14px;">
+    {% for msg in messages %}{{ msg }}<br>{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="grid-2">
+    <!-- Upload form -->
+    <div class="card">
+        <div class="card-header">Upload File</div>
+        <div class="card-body">
+            <form method="POST" action="/imports/upload" enctype="multipart/form-data" class="form-grid">
+                <div class="form-row">
+                    <label>Data Source</label>
+                    <select name="import_type" required class="form-input">
+                        {% for t in import_types %}
+                        <option value="{{ t }}">{{ t.replace('_', ' ')|title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>CSV or JSON File</label>
+                    <div class="file-drop" id="fileDrop">
+                        <input type="file" name="file" accept=".csv,.json" required id="fileInput" style="display:none;">
+                        <div class="drop-text" id="dropText">
+                            <span style="font-size: 24px;">&#128194;</span><br>
+                            Click to browse or drag &amp; drop<br>
+                            <span style="font-size: 12px; color: var(--text-dim);">CSV or JSON files</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Upload &amp; Import</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="card">
+        <div class="card-header">How to Export Data</div>
+        <div class="card-body" style="font-size: 14px; line-height: 1.8;">
+            <div class="export-guide">
+                <h4 style="color: var(--green); margin-bottom: 6px;">Streaming / Distribution</h4>
+                <ul>
+                    <li><strong>DistroKid</strong> — distrokid.com → Bank/Sales → Download</li>
+                    <li><strong>TuneCore</strong> — tunecore.com → Trends &amp; Reports → Export CSV</li>
+                    <li><strong>Spotify for Artists</strong> — artists.spotify.com → Music → Download</li>
+                    <li><strong>Apple Music</strong> — artists.apple.com → Trends → Export</li>
+                </ul>
+
+                <h4 style="color: var(--purple); margin-top: 16px; margin-bottom: 6px;">PRO Royalties</h4>
+                <ul>
+                    <li><strong>ASCAP</strong> — ascap.com → Royalty Statements → Export</li>
+                    <li><strong>BMI</strong> — bmi.com → Royalty Center → Download</li>
+                    <li><strong>SoundExchange</strong> — soundexchange.com → Statements → Download</li>
+                </ul>
+
+                <h4 style="color: var(--orange); margin-top: 16px; margin-bottom: 6px;">Manual Import</h4>
+                <p style="color: var(--text-dim);">
+                    You can also drop files directly into:<br>
+                    <code style="color: var(--accent);">~/Agents/song-tracker/imports/</code><br>
+                    The agent will auto-detect the type and import on its next cycle.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending files -->
+{% if pending %}
+<div class="card">
+    <div class="card-header">Files in Import Queue</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th class="text-right">Size</th>
+                    <th>Modified</th>
+                    <th class="text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in pending %}
+                <tr>
+                    <td class="mono">{{ f.name }}</td>
+                    <td class="text-right mono">{{ "%.1f"|format(f.size / 1024) }} KB</td>
+                    <td>{{ f.modified }}</td>
+                    <td class="text-center">
+                        {% if f.imported %}
+                        <span class="badge badge-green">Imported</span>
+                        {% else %}
+                        <span class="badge badge-yellow">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Import history -->
+<div class="card">
+    <div class="card-header">Import History</div>
+    <div class="card-body" style="padding: 0;">
+        {% if history %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Source</th>
+                    <th>File</th>
+                    <th class="text-right">Imported</th>
+                    <th class="text-right">Skipped</th>
+                    <th>Errors</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in history %}
+                <tr>
+                    <td>{{ h.imported_at }}</td>
+                    <td><span class="badge badge-blue">{{ h.source }}</span></td>
+                    <td class="mono">{{ h.filename or '—' }}</td>
+                    <td class="text-right mono" style="color: var(--green);">{{ h.records_imported }}</td>
+                    <td class="text-right mono">{{ h.records_skipped }}</td>
+                    <td style="color: var(--red); font-size: 13px;">{{ h.errors or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <h3>No Imports Yet</h3>
+            <p>Upload your first data file to get started.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .form-grid { display: flex; flex-direction: column; gap: 12px; }
+    .form-row label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 4px; }
+    .form-input {
+        width: 100%;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 12px;
+        color: var(--text);
+        font-size: 14px;
+    }
+    .form-input:focus { outline: none; border-color: var(--accent); }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #79b8ff; }
+    .file-drop {
+        border: 2px dashed var(--border);
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+    .file-drop:hover, .file-drop.drag-over { border-color: var(--accent); }
+    .export-guide ul { padding-left: 20px; color: var(--text-dim); }
+    .export-guide li { margin-bottom: 4px; }
+    .export-guide strong { color: var(--text); }
+</style>
+
+<script>
+const dropArea = document.getElementById('fileDrop');
+const fileInput = document.getElementById('fileInput');
+const dropText = document.getElementById('dropText');
+
+dropArea.addEventListener('click', () => fileInput.click());
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag-over'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
+dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('drag-over');
+    fileInput.files = e.dataTransfer.files;
+    dropText.innerHTML = '<span style="color: var(--green);">&#10003;</span> ' + e.dataTransfer.files[0].name;
+});
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) {
+        dropText.innerHTML = '<span style="color: var(--green);">&#10003;</span> ' + fileInput.files[0].name;
+    }
+});
+</script>
+{% endblock %}

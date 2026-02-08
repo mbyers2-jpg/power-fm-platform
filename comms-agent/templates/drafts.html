@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Drafts{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Draft Responses</h1>
+</div>
+
+<!-- ===== Stats ===== -->
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="label">Total Drafts</div>
+        <div class="value">{{ stats.total }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Pending Review</div>
+        <div class="value" style="color: var(--purple);">{{ stats.pending_review }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Sent</div>
+        <div class="value" style="color: var(--green);">{{ stats.sent }}</div>
+    </div>
+</div>
+
+<!-- ===== Filter ===== -->
+<form class="filter-bar" method="GET" action="{{ url_for('drafts') }}">
+    <label>Status:</label>
+    <select name="status" onchange="this.form.submit()">
+        <option value="all" {% if filter_status == 'all' %}selected{% endif %}>All</option>
+        <option value="pending_review" {% if filter_status == 'pending_review' %}selected{% endif %}>Pending Review</option>
+        <option value="sent" {% if filter_status == 'sent' %}selected{% endif %}>Sent</option>
+    </select>
+</form>
+
+<!-- ===== Drafts List ===== -->
+{% if items %}
+{% for d in items %}
+<div class="card">
+    <div class="card-header">
+        <div>
+            <span class="badge badge-{{ d.status }}">{{ d.status|replace('_', ' ') }}</span>
+            {% if d.draft_type %}
+            <span class="text-dim text-xs" style="margin-left: 8px;">{{ d.draft_type }}</span>
+            {% endif %}
+        </div>
+        <div class="text-dim text-xs">{{ d.created_at[:16] if d.created_at else '' }}</div>
+    </div>
+    <div class="card-body">
+        <div style="margin-bottom: 12px;">
+            <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                <div>
+                    <span class="text-dim text-xs">TO:</span>
+                    <span class="text-sm">{{ d.to_address or '-' }}</span>
+                </div>
+                <div>
+                    <span class="text-dim text-xs">SUBJECT:</span>
+                    <span class="text-sm">{{ d.subject or '(no subject)' }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="draft-preview">{{ d.body or '(empty)' }}</div>
+        <div class="mt-8" style="display: flex; gap: 8px;">
+            <a href="{{ url_for('draft_detail', draft_id=d.id) }}" class="btn btn-sm btn-accent">View Full</a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty">
+            <div class="empty-title">No drafts found</div>
+            <p class="text-dim text-sm">Adjust filters or run the comms agent to generate drafts.</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

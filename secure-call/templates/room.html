@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Ribbon — {{ room.name }}{% endblock %}
+
+{% block head %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mediasoup-client@3/mediasoup-client.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<div class="room-container" id="roomContainer">
+    <!-- Top bar -->
+    <div class="room-topbar">
+        <div class="topbar-left">
+            <span class="logo-icon-sm">&#127872;</span>
+            <span class="room-title">{{ room.name }}</span>
+        </div>
+        <div class="topbar-center">
+            <span class="e2ee-badge" id="e2eeBadge" title="End-to-end encrypted">
+                &#128274; E2EE
+            </span>
+            <span class="room-code">{{ room.id }}</span>
+            <span class="call-timer" id="callTimer">00:00:00</span>
+        </div>
+        <div class="topbar-right">
+            <span class="participant-count" id="participantCount">1</span>
+            <button class="btn-icon" id="btnCopyInvite" title="Copy invite link">&#128279;</button>
+        </div>
+    </div>
+
+    <!-- Main content area -->
+    <div class="room-main">
+        <!-- Video grid -->
+        <div class="video-area" id="videoArea">
+            <div class="video-grid" id="videoGrid">
+                <!-- Local video -->
+                <div class="video-tile local-tile" id="localTile" data-peer-id="{{ peer_id }}">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                    <div class="tile-label">
+                        <span class="tile-name">{{ display_name }} (You)</span>
+                        <span class="tile-mic-icon" id="localMicIcon">&#127908;</span>
+                    </div>
+                    <div class="active-speaker-ring" id="localSpeakerRing"></div>
+                </div>
+                <!-- Remote tiles inserted dynamically -->
+            </div>
+
+            <!-- Screen share overlay -->
+            <div class="screen-share-view" id="screenShareView" style="display:none;">
+                <video id="screenShareVideo" autoplay playsinline></video>
+                <div class="screen-share-label" id="screenShareLabel"></div>
+            </div>
+        </div>
+
+        <!-- Side panel (Chat / Files) -->
+        <div class="side-panel" id="sidePanel" style="display:none;">
+            <div class="panel-tabs">
+                <button class="panel-tab active" data-tab="chat" id="tabChat">Chat</button>
+                <button class="panel-tab" data-tab="files" id="tabFiles">Files</button>
+                <button class="panel-tab" data-tab="people" id="tabPeople">People</button>
+                <button class="panel-tab" data-tab="pay" id="tabPay">Pay</button>
+                <button class="panel-tab" data-tab="nearby" id="tabNearby">Nearby</button>
+            </div>
+
+            <!-- Chat tab -->
+            <div class="panel-content" id="chatPanel">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-row">
+                    <input type="text" id="chatInput" placeholder="Type a message..."
+                           autocomplete="off" maxlength="2000">
+                    <button class="btn-send" id="btnSendChat">&#10148;</button>
+                </div>
+            </div>
+
+            <!-- Files tab -->
+            <div class="panel-content" id="filesPanel" style="display:none;">
+                <div class="files-list" id="filesList"></div>
+                <div class="file-upload-row">
+                    <input type="file" id="fileInput" style="display:none;">
+                    <button class="btn btn-outline btn-full" id="btnUploadFile">
+                        &#128206; Share File
+                    </button>
+                </div>
+            </div>
+
+            <!-- People tab -->
+            <div class="panel-content" id="peoplePanel" style="display:none;">
+                <div class="people-list" id="peopleList"></div>
+                <div class="pending-approvals" id="pendingApprovals" style="display:none;">
+                    <h4>Waiting to Join</h4>
+                    <div id="approvalsList"></div>
+                </div>
+            </div>
+
+            <!-- Pay tab -->
+            <div class="panel-content" id="payPanel" style="display:none;">
+                <div class="pay-balances" id="payBalances">
+                    <div class="pay-balances-header">Balances</div>
+                    <div class="pay-balances-list" id="balancesList">
+                        <div class="empty-state">No expenses yet</div>
+                    </div>
+                </div>
+                <div class="pay-expenses" id="payExpenses"></div>
+                <div class="pay-add-row">
+                    <button class="btn btn-outline btn-full" id="btnAddExpense">
+                        &#43; Add Expense
+                    </button>
+                </div>
+                <div class="pay-form" id="payForm" style="display:none;">
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="expenseDesc" placeholder="e.g. Studio session" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" id="expenseAmount" placeholder="0.00" step="0.01" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Paid by</label>
+                        <select id="expensePaidBy"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Split</label>
+                        <select id="expenseSplitType">
+                            <option value="equal">Equal split</option>
+                            <option value="custom">Custom amounts</option>
+                        </select>
+                    </div>
+                    <div class="pay-split-custom" id="paySplitCustom" style="display:none;"></div>
+                    <div class="pay-form-actions">
+                        <button class="btn btn-primary" id="btnSubmitExpense">Add</button>
+                        <button class="btn btn-outline" id="btnCancelExpense">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nearby tab -->
+            <div class="panel-content" id="nearbyPanel" style="display:none;">
+                <div class="nearby-location" id="nearbyLocation">
+                    <span class="nearby-loc-icon">&#128205;</span>
+                    <span class="nearby-loc-text" id="nearbyLocText">Getting location...</span>
+                </div>
+                <div class="nearby-categories">
+                    <button class="nearby-cat-btn" data-cat="food">&#127869; Food</button>
+                    <button class="nearby-cat-btn" data-cat="shopping">&#128717; Shopping</button>
+                    <button class="nearby-cat-btn" data-cat="entertainment">&#127926; Entertainment</button>
+                    <button class="nearby-cat-btn" data-cat="medical">&#9968; Medical</button>
+                </div>
+                <div class="nearby-search-row">
+                    <input type="text" id="nearbySearchInput" placeholder="Search places..." maxlength="200">
+                    <button class="btn-send" id="btnNearbySearch">&#128269;</button>
+                </div>
+                <div class="nearby-results" id="nearbyResults"></div>
+                <div class="nearby-shared" id="nearbyShared">
+                    <div class="nearby-shared-header">Shared Places</div>
+                    <div class="nearby-shared-list" id="nearbySharedList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls bar -->
+    <div class="controls-bar" id="controlsBar">
+        <button class="ctrl-btn" id="btnMic" title="Toggle microphone">
+            <span class="ctrl-icon">&#127908;</span>
+            <span class="ctrl-label">Mic</span>
+        </button>
+        <button class="ctrl-btn" id="btnCam" title="Toggle camera">
+            <span class="ctrl-icon">&#128247;</span>
+            <span class="ctrl-label">Cam</span>
+        </button>
+        <button class="ctrl-btn" id="btnScreen" title="Share screen">
+            <span class="ctrl-icon">&#128421;</span>
+            <span class="ctrl-label">Screen</span>
+        </button>
+        <button class="ctrl-btn" id="btnChat" title="Toggle chat">
+            <span class="ctrl-icon">&#128172;</span>
+            <span class="ctrl-label">Chat</span>
+            <span class="badge" id="chatBadge" style="display:none;">0</span>
+        </button>
+        <button class="ctrl-btn" id="btnTravel" title="Travel search">
+            <span class="ctrl-icon">&#9992;</span>
+            <span class="ctrl-label">Travel</span>
+        </button>
+        <button class="ctrl-btn" id="btnSettings" title="Settings">
+            <span class="ctrl-icon">&#9881;</span>
+            <span class="ctrl-label">Settings</span>
+        </button>
+        <button class="ctrl-btn ctrl-leave" id="btnLeave" title="Leave call">
+            <span class="ctrl-icon">&#128683;</span>
+            <span class="ctrl-label">Leave</span>
+        </button>
+    </div>
+
+    <!-- Settings modal -->
+    <div class="modal-overlay" id="settingsModal" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="btn-close" id="btnCloseSettings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="audioInput">Microphone</label>
+                    <select id="audioInput"></select>
+                </div>
+                <div class="form-group">
+                    <label for="videoInput">Camera</label>
+                    <select id="videoInput"></select>
+                </div>
+                <div class="form-group">
+                    <label for="audioOutput">Speaker</label>
+                    <select id="audioOutput"></select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Travel modal -->
+    <div class="modal-overlay" id="travelModal" style="display:none;">
+        <div class="modal-card travel-modal">
+            <div class="modal-header">
+                <h3>&#9992; Travel Search</h3>
+                <button class="btn-close" id="btnCloseTravel">&times;</button>
+            </div>
+            <div class="travel-tabs">
+                <button class="travel-tab active" data-travel="flights">Flights</button>
+                <button class="travel-tab" data-travel="hotels">Hotels</button>
+                <button class="travel-tab" data-travel="cars">Cars</button>
+            </div>
+            <div class="modal-body travel-body">
+                <!-- Flights -->
+                <div class="travel-pane" id="travelFlights">
+                    <div class="travel-form-row">
+                        <div class="form-group">
+                            <label>From (IATA)</label>
+                            <input type="text" id="flightOrigin" placeholder="LAX" maxlength="3">
+                        </div>
+                        <div class="form-group">
+                            <label>To (IATA)</label>
+                            <input type="text" id="flightDest" placeholder="JFK" maxlength="3">
+                        </div>
+                    </div>
+                    <div class="travel-form-row">
+                        <div class="form-group">
+                            <label>Depart</label>
+                            <input type="date" id="flightDepart">
+                        </div>
+                        <div class="form-group">
+                            <label>Return</label>
+                            <input type="date" id="flightReturn">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Passengers</label>
+                        <input type="number" id="flightPax" value="1" min="1" max="9">
+                    </div>
+                    <button class="btn btn-primary btn-full" id="btnSearchFlights">Search Flights</button>
+                    <div class="travel-results" id="flightResults"></div>
+                </div>
+                <!-- Hotels -->
+                <div class="travel-pane" id="travelHotels" style="display:none;">
+                    <div class="form-group">
+                        <label>City (IATA code)</label>
+                        <input type="text" id="hotelCity" placeholder="NYC" maxlength="3">
+                    </div>
+                    <div class="travel-form-row">
+                        <div class="form-group">
+                            <label>Check-in</label>
+                            <input type="date" id="hotelCheckin">
+                        </div>
+                        <div class="form-group">
+                            <label>Check-out</label>
+                            <input type="date" id="hotelCheckout">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Guests</label>
+                        <input type="number" id="hotelGuests" value="1" min="1" max="9">
+                    </div>
+                    <button class="btn btn-primary btn-full" id="btnSearchHotels">Search Hotels</button>
+                    <div class="travel-results" id="hotelResults"></div>
+                </div>
+                <!-- Cars -->
+                <div class="travel-pane" id="travelCars" style="display:none;">
+                    <p class="travel-cars-info">Search car rentals on these platforms:</p>
+                    <a class="btn btn-outline btn-full travel-link" href="https://www.kayak.com/cars" target="_blank" rel="noopener">&#128663; Kayak Car Rentals</a>
+                    <a class="btn btn-outline btn-full travel-link" href="https://www.rentalcars.com" target="_blank" rel="noopener">&#128664; RentalCars.com</a>
+                    <a class="btn btn-outline btn-full travel-link" href="https://turo.com" target="_blank" rel="noopener">&#128665; Turo</a>
+                </div>
+            </div>
+            <!-- Shared bookmarks -->
+            <div class="travel-bookmarks" id="travelBookmarks">
+                <div class="travel-bookmarks-header">Shared Deals</div>
+                <div class="travel-bookmarks-list" id="travelBookmarksList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Room data (passed to JS) -->
+<script>
+    window.ROOM_DATA = {
+        roomId: {{ room.id | tojson }},
+        roomName: {{ room.name | tojson }},
+        peerId: {{ peer_id | tojson }},
+        displayName: {{ display_name | tojson }},
+        inviteToken: {{ invite_token | tojson }},
+        isHost: {{ (room.created_by == display_name) | tojson }},
+        requireApproval: {{ room.require_approval | tojson }},
+        sfuRunning: {{ sfu_running | tojson }},
+    };
+</script>
+
+<script src="{{ url_for('static', filename='js/crypto.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ourtc.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/files.js') }}"></script>
+<script src="{{ url_for('static', filename='js/payments.js') }}"></script>
+<script src="{{ url_for('static', filename='js/nearby.js') }}"></script>
+<script src="{{ url_for('static', filename='js/travel.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

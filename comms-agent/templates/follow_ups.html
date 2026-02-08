@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Follow-ups</h1>
+</div>
+
+<!-- ===== Stats ===== -->
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="label">Total</div>
+        <div class="value">{{ stats.total }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Pending</div>
+        <div class="value" style="color: var(--yellow);">{{ stats.pending }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Overdue</div>
+        <div class="value" style="color: var(--red);">{{ stats.overdue }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Completed</div>
+        <div class="value" style="color: var(--green);">{{ stats.completed }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Critical / High</div>
+        <div class="value" style="color: var(--orange);">{{ stats.critical + stats.high }}</div>
+        <div class="sub">{{ stats.critical }} critical, {{ stats.high }} high</div>
+    </div>
+</div>
+
+<!-- ===== Priority Distribution Chart ===== -->
+<div class="card mb-16">
+    <div class="card-header">Priority Distribution (Pending)</div>
+    <div class="card-body">
+        <div class="chart-container" style="max-height: 200px;">
+            <canvas id="priorityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Filters ===== -->
+<form class="filter-bar" method="GET" action="{{ url_for('follow_ups') }}">
+    <label>Status:</label>
+    <select name="status" onchange="this.form.submit()">
+        <option value="all" {% if filter_status == 'all' %}selected{% endif %}>All</option>
+        <option value="pending" {% if filter_status == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="completed" {% if filter_status == 'completed' %}selected{% endif %}>Completed</option>
+    </select>
+    <label>Priority:</label>
+    <select name="priority" onchange="this.form.submit()">
+        <option value="all" {% if filter_priority == 'all' %}selected{% endif %}>All</option>
+        <option value="critical" {% if filter_priority == 'critical' %}selected{% endif %}>Critical</option>
+        <option value="high" {% if filter_priority == 'high' %}selected{% endif %}>High</option>
+        <option value="medium" {% if filter_priority == 'medium' %}selected{% endif %}>Medium</option>
+        <option value="low" {% if filter_priority == 'low' %}selected{% endif %}>Low</option>
+    </select>
+</form>
+
+<!-- ===== Follow-up Table ===== -->
+<div class="card">
+    <div class="card-header">
+        Follow-ups ({{ items|length }})
+    </div>
+    <div class="card-body no-pad">
+        {% if items %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Contact</th>
+                    <th>Subject</th>
+                    <th>Reason</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Due Date</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for f in items %}
+                <tr>
+                    <td>
+                        <div>{{ f.contact_name or 'Unknown' }}</div>
+                        <div class="text-dim text-xs mono">{{ f.contact_email }}</div>
+                    </td>
+                    <td class="text-sm">{{ f.subject or '(no subject)' }}</td>
+                    <td class="snippet" style="max-width:250px;">{{ f.reason or '' }}</td>
+                    <td><span class="badge badge-{{ f.priority }}">{{ f.priority }}</span></td>
+                    <td>
+                        {% if f.id in overdue_ids %}
+                            <span class="badge badge-overdue">overdue</span>
+                        {% else %}
+                            <span class="badge badge-{{ f.status }}">{{ f.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-sm {% if f.id in overdue_ids %}text-red{% else %}text-dim{% endif %}">
+                        {{ f.due_date or '-' }}
+                    </td>
+                    <td class="text-dim text-xs">{{ f.created_at[:10] if f.created_at else '-' }}</td>
+                    <td>
+                        {% if f.status == 'pending' %}
+                        <form method="POST" action="{{ url_for('complete_follow_up', item_id=f.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-green">Complete</button>
+                        </form>
+                        {% elif f.status == 'completed' %}
+                        <span class="text-green text-xs">{{ f.completed_at[:10] if f.completed_at else '' }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-title">No follow-ups found</div>
+            <p class="text-dim text-sm">Adjust filters or check back later.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+fetch('/api/followup-priority')
+    .then(r => r.json())
+    .then(data => {
+        const order = ['critical', 'high', 'medium', 'low'];
+        const colors = { critical: '#f85149', high: '#f0883e', medium: '#d29922', low: '#8b949e' };
+        const labels = order.filter(k => data[k]);
+        const values = labels.map(k => data[k]);
+        new Chart(document.getElementById('priorityChart'), {
+            type: 'bar',
+            data: {
+                labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                datasets: [{
+                    data: values,
+                    backgroundColor: labels.map(l => colors[l]),
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        ticks: { color: '#8b949e', stepSize: 1 },
+                        grid: { color: '#30363d' }
+                    },
+                    y: {
+                        ticks: { color: '#e6edf3', font: { size: 13, weight: 600 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

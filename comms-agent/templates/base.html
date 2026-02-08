@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard{% endblock %} - Comms Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        /* ---------- Reset & Variables ---------- */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #1c2333;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --yellow: #d29922;
+            --red: #f85149;
+            --purple: #bc8cff;
+            --orange: #f0883e;
+            --radius: 8px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* ---------- Nav ---------- */
+        .nav {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            height: 56px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-brand {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            margin-right: 32px;
+            white-space: nowrap;
+        }
+        .nav-links { display: flex; gap: 4px; }
+        .nav-links a {
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            color: var(--text-dim);
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.15s, color 0.15s;
+        }
+        .nav-links a:hover { background: var(--surface2); color: var(--text); text-decoration: none; }
+        .nav-links a.active { background: var(--surface2); color: var(--accent); }
+
+        /* ---------- Layout ---------- */
+        .container { max-width: 1320px; margin: 0 auto; padding: 24px; }
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .page-header h1 { font-size: 24px; font-weight: 700; }
+
+        /* ---------- Stat Cards ---------- */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        .stat-card .label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .stat-card .sub {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        /* ---------- Cards / Panels ---------- */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-body { padding: 20px; }
+        .card-body.no-pad { padding: 0; }
+
+        /* ---------- Grid layout ---------- */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        @media (max-width: 900px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ---------- Tables ---------- */
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+        td {
+            padding: 10px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(88, 166, 255, 0.04); }
+
+        /* ---------- Badges ---------- */
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.6;
+        }
+        .badge-critical { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-high { background: rgba(240,136,62,0.15); color: var(--orange); }
+        .badge-medium { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge-low { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+        .badge-normal { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+        .badge-pending { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge-pending_review { background: rgba(188,140,255,0.15); color: var(--purple); }
+        .badge-completed { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-sent { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-overdue { background: rgba(248,81,73,0.2); color: var(--red); }
+        .badge-gmail { background: rgba(248,81,73,0.12); color: #ea4335; }
+        .badge-ms365 { background: rgba(88,166,255,0.12); color: #0078d4; }
+        .badge-GMAIL { background: rgba(248,81,73,0.12); color: #ea4335; }
+        .badge-MICROSOFT365 { background: rgba(88,166,255,0.12); color: #0078d4; }
+
+        /* ---------- Buttons ---------- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--text);
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn:hover { background: var(--border); border-color: var(--text-dim); text-decoration: none; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-green { border-color: var(--green); color: var(--green); }
+        .btn-green:hover { background: rgba(63,185,80,0.15); }
+        .btn-accent { border-color: var(--accent); color: var(--accent); }
+
+        /* ---------- Forms ---------- */
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-bar label {
+            font-size: 13px;
+            color: var(--text-dim);
+            font-weight: 500;
+        }
+        select, input[type="text"], input[type="search"] {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        select:focus, input:focus { outline: none; border-color: var(--accent); }
+        .search-input {
+            padding: 8px 14px;
+            width: 300px;
+            max-width: 100%;
+        }
+
+        /* ---------- Snippets & text ---------- */
+        .snippet {
+            color: var(--text-dim);
+            font-size: 13px;
+            max-width: 400px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .text-dim { color: var(--text-dim); }
+        .text-sm { font-size: 13px; }
+        .text-xs { font-size: 12px; }
+        .text-green { color: var(--green); }
+        .text-red { color: var(--red); }
+        .text-yellow { color: var(--yellow); }
+        .text-accent { color: var(--accent); }
+        .mt-8 { margin-top: 8px; }
+        .mt-16 { margin-top: 16px; }
+        .mb-16 { margin-bottom: 16px; }
+        .mono { font-family: 'SF Mono', SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+        /* ---------- Draft preview ---------- */
+        .draft-preview {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            font-size: 13px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        /* ---------- Chart containers ---------- */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-height: 280px;
+        }
+
+        /* ---------- Empty state ---------- */
+        .empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+        }
+        .empty .empty-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-brand">Comms & Email Agent</div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('follow_ups') }}" class="{% if request.endpoint == 'follow_ups' %}active{% endif %}">Follow-ups</a>
+            <a href="{{ url_for('drafts') }}" class="{% if request.endpoint == 'drafts' %}active{% endif %}">Drafts</a>
+            <a href="{{ url_for('contacts') }}" class="{% if request.endpoint == 'contacts' %}active{% endif %}">Contacts</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

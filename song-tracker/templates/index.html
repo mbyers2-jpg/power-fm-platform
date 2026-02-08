@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Song Tracker — Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Catalog Dashboard</h1>
+    <div class="subtitle">Last updated: {{ now }}</div>
+</div>
+
+<!-- Top-level stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Total Songs</div>
+        <div class="value accent">{{ total_songs }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Artists</div>
+        <div class="value purple">{{ artists|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Total Revenue</div>
+        <div class="value green">${{ "%.2f"|format(grand_total) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Revenue Sources</div>
+        <div class="value orange">{{ source_data|length }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Revenue by Source chart -->
+    <div class="card">
+        <div class="card-header">Revenue by Source</div>
+        <div class="card-body">
+            {% if grand_total > 0 %}
+            <div class="chart-container">
+                <canvas id="sourceChart"></canvas>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Revenue Data Yet</h3>
+                <p>Import streaming data from Spotify, Apple Music, DistroKid, or other platforms.</p>
+                <p style="margin-top: 12px; font-size: 13px;">
+                    Drop CSV/JSON files into:<br>
+                    <code style="color: var(--accent);">~/Agents/song-tracker/imports/</code>
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Artists breakdown -->
+    <div class="card">
+        <div class="card-header">Artists</div>
+        <div class="card-body">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Artist</th>
+                        <th class="text-center">Songs</th>
+                        <th class="text-right">Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in artists %}
+                    <tr>
+                        <td><a href="/artist/{{ a.name|urlencode }}">{{ a.name }}</a></td>
+                        <td class="text-center">{{ a.songs }}</td>
+                        <td class="text-right mono">${{ "%.2f"|format(a.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if monthly_trend %}
+<div class="card">
+    <div class="card-header">Monthly Revenue Trend</div>
+    <div class="card-body">
+        <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Song Catalog Table -->
+<div class="card">
+    <div class="card-header">
+        <span>Full Catalog</span>
+        <input type="text" class="search-box" id="songSearch" placeholder="Search songs..." oninput="filterSongs()">
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <table id="songTable">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Artist</th>
+                    <th class="text-right">Streaming</th>
+                    <th class="text-right">Radio</th>
+                    <th class="text-right">PRO</th>
+                    <th class="text-right">Sync</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in songs %}
+                <tr class="song-row">
+                    <td><a href="/song/{{ s.id }}">{{ s.title }}</a></td>
+                    <td><a href="/artist/{{ s.artist|urlencode }}">{{ s.artist }}</a></td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.streaming) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.radio) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.pro_royalties) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.sync) }}</td>
+                    <td class="text-right mono" style="font-weight: 600;">${{ "%.2f"|format(s.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Platform Rate Cards -->
+<div class="card">
+    <div class="card-header">Platform Rate Cards (per stream)</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Platform</th>
+                    <th>Tier</th>
+                    <th class="text-right">Rate</th>
+                    <th>Visual</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rate_cards %}
+                {% set max_rate = 0.012 %}
+                {% set pct = (r.rate / max_rate * 100)|int %}
+                <tr>
+                    <td>{{ r.platform.replace('_', ' ')|title }}</td>
+                    <td><span class="badge {% if r.tier == 'premium' %}badge-green{% else %}badge-yellow{% endif %}">{{ r.tier }}</span></td>
+                    <td class="text-right mono">${{ "%.4f"|format(r.rate) }}</td>
+                    <td style="width: 40%;">
+                        <div class="progress-bar">
+                            <div class="fill fill-accent" style="width: {{ pct }}%"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Source chart
+{% if grand_total > 0 %}
+const sourceData = {{ source_data|tojson }};
+new Chart(document.getElementById('sourceChart'), {
+    type: 'doughnut',
+    data: {
+        labels: Object.keys(sourceData).map(k => k.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())),
+        datasets: [{
+            data: Object.values(sourceData),
+            backgroundColor: ['#58a6ff', '#3fb950', '#bc8cff', '#f0883e', '#f778ba'],
+            borderColor: '#161b22',
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: { color: '#e6edf3', font: { size: 13 } }
+            }
+        }
+    }
+});
+{% endif %}
+
+// Monthly trend chart
+{% if monthly_trend %}
+const trendData = {{ monthly_trend|tojson }};
+const months = trendData.map(d => d.month).reverse();
+const revenues = trendData.map(d => d.revenue || 0).reverse();
+const streams = trendData.map(d => d.streams || 0).reverse();
+
+new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+        labels: months,
+        datasets: [{
+            label: 'Revenue ($)',
+            data: revenues,
+            backgroundColor: 'rgba(88,166,255,0.6)',
+            borderColor: '#58a6ff',
+            borderWidth: 1,
+            yAxisID: 'y',
+        }, {
+            label: 'Streams',
+            data: streams,
+            type: 'line',
+            borderColor: '#3fb950',
+            backgroundColor: 'rgba(63,185,80,0.1)',
+            fill: true,
+            tension: 0.3,
+            yAxisID: 'y1',
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            x: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+            y: {
+                position: 'left',
+                ticks: { color: '#58a6ff', callback: v => '$' + v.toFixed(2) },
+                grid: { color: '#30363d' },
+            },
+            y1: {
+                position: 'right',
+                ticks: { color: '#3fb950', callback: v => v.toLocaleString() },
+                grid: { display: false },
+            }
+        },
+        plugins: {
+            legend: { labels: { color: '#e6edf3' } }
+        }
+    }
+});
+{% endif %}
+
+// Search
+function filterSongs() {
+    const q = document.getElementById('songSearch').value.toLowerCase();
+    document.querySelectorAll('.song-row').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

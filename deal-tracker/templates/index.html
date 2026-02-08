@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Deal Tracker — Pipeline{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Deal Pipeline</h1>
+    <div class="subtitle">Last updated: {{ now }}</div>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Total Deals</div>
+        <div class="value accent">{{ stats.total }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Active</div>
+        <div class="value green">{{ stats.active }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Stale (30+ Days)</div>
+        <div class="value {% if stats.stale_30d > 0 %}red{% else %}green{% endif %}">{{ stats.stale_30d }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Won</div>
+        <div class="value purple">{{ stats.closed_won }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Lost</div>
+        <div class="value orange">{{ stats.closed_lost }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Pending Milestones</div>
+        <div class="value yellow">{{ stats.pending_milestones }}</div>
+    </div>
+</div>
+
+<!-- Stale Deals Alert -->
+{% if stale_deals %}
+<div class="stale-alert">
+    <h3>{{ stale_deals|length }} Stale Deal{{ 's' if stale_deals|length != 1 else '' }} — No Activity in 30+ Days</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+        {% for d in stale_deals[:8] %}
+        <a href="/deal/{{ d.id }}" class="badge badge-red" style="font-size: 12px; padding: 4px 10px;">
+            {{ d.name|truncate(30) }} ({{ d.days_stale }}d)
+        </a>
+        {% endfor %}
+        {% if stale_deals|length > 8 %}
+        <span class="badge badge-red" style="font-size: 12px; padding: 4px 10px;">+{{ stale_deals|length - 8 }} more</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Kanban Pipeline Board -->
+<div class="card">
+    <div class="card-header">
+        <span>Pipeline Board</span>
+        <input type="text" class="search-box" id="dealSearch" placeholder="Search deals..." oninput="filterDeals()">
+    </div>
+</div>
+
+<div class="kanban-board">
+    {% for stage in stage_order %}
+    {% set deals = grouped.get(stage, []) %}
+    <div class="kanban-column" data-stage="{{ stage }}">
+        <div class="kanban-header" style="border-top: 3px solid var(--{{ stage_colors.get(stage, 'accent') }});">
+            <span style="color: var(--{{ stage_colors.get(stage, 'accent') }});">{{ stage_labels.get(stage, stage) }}</span>
+            <span class="count">{{ deals|length }}</span>
+        </div>
+        <div class="kanban-cards">
+            {% for deal in deals %}
+            <div class="kanban-card deal-card" data-name="{{ deal.name|lower }}">
+                <div class="deal-name">
+                    <a href="/deal/{{ deal.id }}">{{ deal.name }}</a>
+                </div>
+                {% if deal.counterparty %}
+                <div class="deal-meta">{{ deal.counterparty }}</div>
+                {% endif %}
+                {% if deal.last_activity %}
+                <div class="deal-meta">Last active: {{ deal.last_activity[:10] }}</div>
+                {% endif %}
+                <div class="deal-tags">
+                    {% if deal.deal_type %}
+                    <span class="badge badge-blue">{{ deal.deal_type }}</span>
+                    {% endif %}
+                    {% if deal.priority and deal.priority != 'medium' %}
+                    <span class="badge badge-{% if deal.priority == 'critical' %}red{% elif deal.priority == 'high' %}orange{% else %}yellow{% endif %}">{{ deal.priority }}</span>
+                    {% endif %}
+                    {% if deal.value_estimate %}
+                    <span class="badge badge-green">{{ deal.value_estimate }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if not deals %}
+            <div style="text-align: center; padding: 20px; color: var(--text-dim); font-size: 13px;">
+                No deals
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Charts Row -->
+<div class="grid-2">
+    <!-- Stage Distribution -->
+    <div class="card">
+        <div class="card-header">Deals by Stage</div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="stageChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deal Type Breakdown -->
+    <div class="card">
+        <div class="card-header">Deal Types</div>
+        <div class="card-body">
+            {% if type_data %}
+            <div class="chart-container">
+                <canvas id="typeChart"></canvas>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Type Data</h3>
+                <p>Assign deal types to see breakdown.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+{% if recent_deals %}
+<div class="card">
+    <div class="card-header">Recent Activity</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Deal</th>
+                    <th>Stage</th>
+                    <th>Counterparty</th>
+                    <th>Type</th>
+                    <th>Last Activity</th>
+                    <th>Next Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in recent_deals %}
+                <tr>
+                    <td><a href="/deal/{{ d.id }}">{{ d.name }}</a></td>
+                    <td>
+                        <span class="badge badge-{{ stage_colors.get(d.stage, 'blue') }}">{{ stage_labels.get(d.stage, d.stage) }}</span>
+                    </td>
+                    <td>{{ d.counterparty or '-' }}</td>
+                    <td>{{ d.deal_type or '-' }}</td>
+                    <td class="mono">{{ d.last_activity[:10] if d.last_activity else '-' }}</td>
+                    <td>{{ d.next_action or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Upcoming Milestones -->
+{% if upcoming_milestones %}
+<div class="card">
+    <div class="card-header">Upcoming Milestones (Next 14 Days)</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Milestone</th>
+                    <th>Deal</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in upcoming_milestones %}
+                <tr>
+                    <td>{{ m.title }}</td>
+                    <td><a href="/deal/{{ m.deal_id }}">{{ m.deal_name }}</a></td>
+                    <td class="mono {% if m.due_date < now[:10] %}" style="color: var(--red); font-weight: 600;{% endif %}">
+                        {{ m.due_date }}
+                        {% if m.due_date < now[:10] %} (OVERDUE){% endif %}
+                    </td>
+                    <td><span class="badge badge-yellow">{{ m.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Stage distribution chart
+const stageCounts = {{ stage_counts|tojson }};
+const stageLabels = {{ stage_labels|tojson }};
+const stageColorMap = {
+    'prospect': '#bc8cff',
+    'negotiation': '#d29922',
+    'contract': '#f0883e',
+    'signed': '#58a6ff',
+    'active': '#3fb950',
+};
+
+const stageKeys = {{ stage_order|tojson }};
+new Chart(document.getElementById('stageChart'), {
+    type: 'bar',
+    data: {
+        labels: stageKeys.map(k => stageLabels[k] || k),
+        datasets: [{
+            data: stageKeys.map(k => stageCounts[k] || 0),
+            backgroundColor: stageKeys.map(k => stageColorMap[k] || '#58a6ff'),
+            borderColor: stageKeys.map(k => stageColorMap[k] || '#58a6ff'),
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#8b949e' },
+                grid: { color: '#30363d' },
+            },
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    color: '#8b949e',
+                    stepSize: 1,
+                    callback: v => Number.isInteger(v) ? v : ''
+                },
+                grid: { color: '#30363d' },
+            }
+        }
+    }
+});
+
+// Type breakdown chart
+{% if type_data %}
+const typeData = {{ type_data|tojson }};
+const typeColors = ['#58a6ff', '#3fb950', '#bc8cff', '#f0883e', '#d29922', '#f85149'];
+new Chart(document.getElementById('typeChart'), {
+    type: 'doughnut',
+    data: {
+        labels: Object.keys(typeData).map(k => (k || 'Unknown').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())),
+        datasets: [{
+            data: Object.values(typeData),
+            backgroundColor: typeColors.slice(0, Object.keys(typeData).length),
+            borderColor: '#161b22',
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: { color: '#e6edf3', font: { size: 13 } }
+            }
+        }
+    }
+});
+{% endif %}
+
+// Deal search filter
+function filterDeals() {
+    const q = document.getElementById('dealSearch').value.toLowerCase();
+    document.querySelectorAll('.deal-card').forEach(card => {
+        const name = card.dataset.name || '';
+        const text = card.textContent.toLowerCase();
+        card.style.display = (name.includes(q) || text.includes(q)) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

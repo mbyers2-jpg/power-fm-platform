@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}{{ song.title }} — Song Tracker{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">&larr; Back to Dashboard</a>
+
+<div class="page-header">
+    <h1>{{ song.title }}</h1>
+    <div class="subtitle">
+        <a href="/artist/{{ song.artist|urlencode }}">{{ song.artist }}</a>
+        {% if song.featured_artists %} ft. {{ song.featured_artists }}{% endif %}
+        {% if song.album %} &middot; {{ song.album }}{% endif %}
+        {% if song.status %}
+            &middot; <span class="badge {% if song.status == 'active' %}badge-green{% elif song.status == 'unreleased' %}badge-yellow{% else %}badge-red{% endif %}">{{ song.status }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Metadata -->
+<div class="stats-row">
+    {% if song.isrc %}
+    <div class="stat-card">
+        <div class="label">ISRC</div>
+        <div class="value" style="font-size: 16px;">{{ song.isrc }}</div>
+    </div>
+    {% endif %}
+    {% if song.release_date %}
+    <div class="stat-card">
+        <div class="label">Released</div>
+        <div class="value" style="font-size: 16px;">{{ song.release_date }}</div>
+    </div>
+    {% endif %}
+    {% if song.label %}
+    <div class="stat-card">
+        <div class="label">Label</div>
+        <div class="value" style="font-size: 16px;">{{ song.label }}</div>
+    </div>
+    {% endif %}
+    {% if song.distributor %}
+    <div class="stat-card">
+        <div class="label">Distributor</div>
+        <div class="value" style="font-size: 16px;">{{ song.distributor }}</div>
+    </div>
+    {% endif %}
+    {% if song.genre %}
+    <div class="stat-card">
+        <div class="label">Genre</div>
+        <div class="value" style="font-size: 16px;">{{ song.genre }}{% if song.subgenre %} / {{ song.subgenre }}{% endif %}</div>
+    </div>
+    {% endif %}
+    {% if song.bpm %}
+    <div class="stat-card">
+        <div class="label">BPM / Key</div>
+        <div class="value" style="font-size: 16px;">{{ song.bpm }}{% if song.key %} / {{ song.key }}{% endif %}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Earnings Summary -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Streaming</div>
+        <div class="value accent">${{ "%.2f"|format(analytics.earnings.streaming) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Radio</div>
+        <div class="value purple">${{ "%.2f"|format(analytics.earnings.radio) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">PRO Royalties</div>
+        <div class="value orange">${{ "%.2f"|format(analytics.earnings.pro_royalties) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Sync</div>
+        <div class="value" style="color: var(--pink);">${{ "%.2f"|format(analytics.earnings.sync) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Total Revenue</div>
+        <div class="value green">${{ "%.2f"|format(analytics.earnings.total) }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Streaming Breakdown -->
+    <div class="card">
+        <div class="card-header">Streaming Breakdown</div>
+        <div class="card-body">
+            {% if analytics.streams %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Platform</th>
+                        <th class="text-right">Streams</th>
+                        <th class="text-right">Revenue</th>
+                        <th class="text-right">Per Stream</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in analytics.streams %}
+                    <tr>
+                        <td>{{ s.platform.replace('_', ' ')|title }}</td>
+                        <td class="text-right mono">{{ "{:,}".format(s.total_streams) }}</td>
+                        <td class="text-right mono">${{ "%.2f"|format(s.total_revenue) }}</td>
+                        <td class="text-right mono">${{ "%.4f"|format(s.total_revenue / s.total_streams if s.total_streams else 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Streaming Data</h3>
+                <p>Import data from your distributor to see streaming breakdown.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Revenue Splits -->
+    <div class="card">
+        <div class="card-header">Revenue Splits</div>
+        <div class="card-body">
+            {% if analytics.splits and analytics.splits[0].name != 'Unassigned' %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rights Holder</th>
+                        <th>Role</th>
+                        <th class="text-right">Split</th>
+                        <th class="text-right">Gross</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sp in analytics.splits %}
+                    <tr>
+                        <td>{{ sp.name }}</td>
+                        <td><span class="badge badge-blue">{{ sp.role }}</span></td>
+                        <td class="text-right mono">{{ "%.1f"|format(sp.split_pct) }}%</td>
+                        <td class="text-right mono">${{ "%.2f"|format(sp.gross_amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Splits Configured</h3>
+                <p>Add rights holders and ownership splits for this song.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Radio Plays -->
+    <div class="card">
+        <div class="card-header">Radio Plays</div>
+        <div class="card-body">
+            {% if analytics.radio %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th class="text-right">Plays</th>
+                        <th class="text-right">Reach</th>
+                        <th class="text-right">Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in analytics.radio %}
+                    <tr>
+                        <td>{{ r.station_type|title }}</td>
+                        <td class="text-right mono">{{ r.plays }}</td>
+                        <td class="text-right mono">{{ "{:,}".format(r.reach or 0) }}</td>
+                        <td class="text-right mono">${{ "%.2f"|format(r.revenue or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state"><p>No radio play data yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- PRO Royalties -->
+    <div class="card">
+        <div class="card-header">PRO Royalties</div>
+        <div class="card-body">
+            {% if analytics.pro_royalties %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>PRO</th>
+                        <th>Type</th>
+                        <th class="text-right">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in analytics.pro_royalties %}
+                    <tr>
+                        <td>{{ p.pro }}</td>
+                        <td>{{ p.royalty_type }}</td>
+                        <td class="text-right mono">${{ "%.2f"|format(p.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state"><p>No PRO royalty data yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Sync Placements -->
+    <div class="card">
+        <div class="card-header">Sync Placements</div>
+        <div class="card-body">
+            {% if analytics.sync %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th class="text-right">Count</th>
+                        <th class="text-right">Fees</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in analytics.sync %}
+                    <tr>
+                        <td>{{ s.placement_type|title }}</td>
+                        <td class="text-right mono">{{ s.count }}</td>
+                        <td class="text-right mono">${{ "%.2f"|format(s.total_fee) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state"><p>No sync placements yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Playlist Placements -->
+    <div class="card">
+        <div class="card-header">Playlist Placements</div>
+        <div class="card-body">
+            {% if analytics.playlists %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Playlist</th>
+                        <th>Platform</th>
+                        <th class="text-right">Followers</th>
+                        <th class="text-center">Editorial</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pl in analytics.playlists %}
+                    <tr>
+                        <td>{{ pl.playlist_name }}</td>
+                        <td>{{ pl.platform }}</td>
+                        <td class="text-right mono">{{ "{:,}".format(pl.playlist_followers or 0) }}</td>
+                        <td class="text-center">{% if pl.is_editorial %}<span class="badge badge-green">Yes</span>{% else %}-{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state"><p>No playlist placement data yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Audience Data -->
+{% if analytics.audience %}
+<div class="card">
+    <div class="card-header">Audience Data</div>
+    <div class="card-body">
+        <div class="stats-row">
+            {% if analytics.audience.monthly_listeners %}
+            <div class="stat-card">
+                <div class="label">Monthly Listeners</div>
+                <div class="value accent">{{ "{:,}".format(analytics.audience.monthly_listeners) }}</div>
+            </div>
+            {% endif %}
+            {% if analytics.audience.followers %}
+            <div class="stat-card">
+                <div class="label">Followers</div>
+                <div class="value purple">{{ "{:,}".format(analytics.audience.followers) }}</div>
+            </div>
+            {% endif %}
+            {% if analytics.audience.saves %}
+            <div class="stat-card">
+                <div class="label">Saves</div>
+                <div class="value green">{{ "{:,}".format(analytics.audience.saves) }}</div>
+            </div>
+            {% endif %}
+            {% if analytics.audience.shazams %}
+            <div class="stat-card">
+                <div class="label">Shazams</div>
+                <div class="value orange">{{ "{:,}".format(analytics.audience.shazams) }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Projections -->
+{% if analytics.projections.monthly_total > 0 %}
+<div class="card">
+    <div class="card-header">Revenue Projections (12 months)</div>
+    <div class="card-body">
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="label">Monthly Projected</div>
+                <div class="value green">${{ "%.2f"|format(analytics.projections.monthly_total) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Annual Projected</div>
+                <div class="value accent">${{ "%.2f"|format(analytics.projections.annual_projection) }}</div>
+            </div>
+        </div>
+        {% if analytics.projections.by_platform %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Platform</th>
+                    <th class="text-right">Daily Streams</th>
+                    <th class="text-right">Monthly Revenue</th>
+                    <th class="text-right">12-Month Projection</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in analytics.projections.by_platform %}
+                <tr>
+                    <td>{{ p.platform.replace('_', ' ')|title }}</td>
+                    <td class="text-right mono">{{ "{:,}".format(p.daily_streams) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(p.monthly_revenue) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(p.projected_total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if song.notes %}
+<div class="card">
+    <div class="card-header">Notes</div>
+    <div class="card-body" style="color: var(--text-dim); font-size: 14px;">
+        {{ song.notes }}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,6 @@
+{
+    "client_id": "YOUR_CLIENT_ID_HERE",
+    "tenant_id": "YOUR_TENANT_ID_HERE",
+    "scopes": ["Mail.Read", "Mail.ReadBasic", "User.Read"],
+    "account_email": "m.byers@2035ventures.co"
+}

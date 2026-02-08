@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Ribbon — Lobby{% endblock %}
+
+{% block body %}
+<div class="lobby-container">
+    <div class="lobby-header">
+        <div class="logo-row">
+            <span class="logo-icon">&#127872;</span>
+            <h1>Ribbon</h1>
+        </div>
+        <p class="tagline">Secure team conferencing. End-to-end encrypted.</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if join_room %}
+    <!-- Join form for specific room -->
+    <div class="card join-card">
+        <h2>Join "{{ join_room.name }}"</h2>
+        <form method="POST" action="{{ url_for('join_room_page', room_id=join_room.id) }}">
+            <div class="form-group">
+                <label for="display_name">Your Name</label>
+                <input type="text" id="display_name" name="display_name" required
+                       placeholder="Enter your name" autocomplete="off" maxlength="30">
+            </div>
+            {% if needs_passphrase %}
+            <div class="form-group">
+                <label for="passphrase">Room Passphrase</label>
+                <input type="password" id="passphrase" name="passphrase" required
+                       placeholder="Enter room passphrase">
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn-primary btn-full">Join Room</button>
+        </form>
+    </div>
+    {% else %}
+    <!-- Create room + browse rooms -->
+    <div class="lobby-grid">
+        <div class="card create-card">
+            <h2>Create a Room</h2>
+            <form method="POST" action="{{ url_for('create_room') }}">
+                <div class="form-group">
+                    <label for="display_name">Your Name</label>
+                    <input type="text" id="display_name" name="display_name" required
+                           placeholder="Enter your name" autocomplete="off" maxlength="30">
+                </div>
+                <div class="form-group">
+                    <label for="name">Room Name</label>
+                    <input type="text" id="name" name="name" required
+                           placeholder="e.g. Team Sync" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="passphrase">Passphrase <span class="optional">(optional)</span></label>
+                    <input type="password" id="passphrase" name="passphrase"
+                           placeholder="Lock room with passphrase">
+                </div>
+                <div class="form-group">
+                    <label for="max_participants">Max Participants</label>
+                    <select id="max_participants" name="max_participants">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="15" selected>15</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label class="toggle-label">
+                        <input type="checkbox" name="is_private">
+                        <span class="toggle-text">Private Room</span>
+                        <span class="hint">Hidden from lobby</span>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <label class="toggle-label">
+                        <input type="checkbox" name="require_approval">
+                        <span class="toggle-text">Require Approval</span>
+                        <span class="hint">Host must approve each join</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Create Room</button>
+            </form>
+        </div>
+
+        <div class="card rooms-card">
+            <h2>Active Rooms</h2>
+            {% if rooms %}
+            <div class="rooms-list">
+                {% for room in rooms %}
+                <a href="{{ url_for('join_room_page', room_id=room.id) }}" class="room-item">
+                    <div class="room-name">{{ room.name }}</div>
+                    <div class="room-meta">
+                        <span class="room-host">{{ room.created_by }}</span>
+                        {% if room.passphrase_hash %}
+                        <span class="room-lock" title="Passphrase required">&#128274;</span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty-state">No active rooms. Create one to get started.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

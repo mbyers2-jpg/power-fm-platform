@@ -1,0 +1,50 @@
+# Virtual environments
+venv/
+.venv/
+
+# Data and databases
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Credentials and tokens
+credentials.json
+token.json
+microsoft_config.json
+
+# Generated output
+briefings/
+reports/
+drafts/
+imports/
+logs/
+
+# Browser profiles (contain session data)
+chrome-profile/
+pw-profile/
+playwright-profile/
+
+# Node
+node_modules/
+
+# PID files
+*.pid
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# n8n runtime
+n8n/.n8n/

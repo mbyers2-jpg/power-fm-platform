@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Deal Tracker — Gap Analysis{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Gap Analysis</h1>
+    <div class="subtitle">Identify deals missing critical information</div>
+</div>
+
+<!-- Summary Stats -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Active Deals</div>
+        <div class="value accent">{{ total_active }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Deals With Gaps</div>
+        <div class="value {% if deals_with_gaps > 0 %}red{% else %}green{% endif %}">{{ deals_with_gaps }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Clean Deals</div>
+        <div class="value green">{{ clean_deals }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Completion Rate</div>
+        <div class="value {% if gap_pct > 50 %}red{% elif gap_pct > 25 %}yellow{% else %}green{% endif %}">
+            {{ 100 - gap_pct }}%
+        </div>
+        <div class="progress-bar">
+            <div class="fill {% if gap_pct > 50 %}fill-red{% elif gap_pct > 25 %}fill-yellow{% else %}fill-green{% endif %}" style="width: {{ 100 - gap_pct }}%;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Gap Frequency Chart -->
+    <div class="card">
+        <div class="card-header">Most Common Gaps</div>
+        <div class="card-body">
+            {% if gap_freq %}
+            <div class="chart-container">
+                <canvas id="gapChart"></canvas>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Gaps Found</h3>
+                <p>All active deals have complete information.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Gap Severity Breakdown -->
+    <div class="card">
+        <div class="card-header">Severity Distribution</div>
+        <div class="card-body">
+            {% if gaps %}
+            <div class="chart-container">
+                <canvas id="severityChart"></canvas>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>All Clear</h3>
+                <p>No gaps to report.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Gap Frequency Table -->
+{% if gap_freq %}
+<div class="card">
+    <div class="card-header">Gap Type Frequency</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Gap Type</th>
+                    <th class="text-center">Deals Affected</th>
+                    <th>Coverage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gap_text, count in gap_freq %}
+                {% set pct = ((total_active - count) / total_active * 100)|int if total_active > 0 else 100 %}
+                <tr>
+                    <td>{{ gap_text }}</td>
+                    <td class="text-center">
+                        <span class="badge {% if count > total_active // 2 %}badge-red{% elif count > total_active // 4 %}badge-orange{% else %}badge-yellow{% endif %}">
+                            {{ count }} deal{{ 's' if count != 1 else '' }}
+                        </span>
+                    </td>
+                    <td style="width: 40%;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="progress-bar" style="flex: 1; margin-top: 0;">
+                                <div class="fill {% if pct >= 75 %}fill-green{% elif pct >= 50 %}fill-yellow{% else %}fill-red{% endif %}" style="width: {{ pct }}%;"></div>
+                            </div>
+                            <span class="mono" style="font-size: 12px; color: var(--text-dim);">{{ pct }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Per-Deal Gap Details -->
+<div class="card">
+    <div class="card-header">
+        <span>Deals With Gaps ({{ deals_with_gaps }})</span>
+        <input type="text" class="search-box" id="gapSearch" placeholder="Search deals..." oninput="filterGaps()">
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if gaps %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Severity</th>
+                    <th>Deal</th>
+                    <th>Stage</th>
+                    <th>Gaps</th>
+                    <th class="text-center">Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in gaps %}
+                <tr class="gap-row">
+                    <td>
+                        <div class="gap-indicator">
+                            <span class="gap-dot {{ g.severity }}"></span>
+                            <span style="font-size: 12px; text-transform: uppercase; color: var(--{% if g.severity == 'high' %}red{% elif g.severity == 'medium' %}yellow{% else %}green{% endif %});">
+                                {{ g.severity }}
+                            </span>
+                        </div>
+                    </td>
+                    <td><a href="/deal/{{ g.deal.id }}">{{ g.deal.name }}</a></td>
+                    <td>
+                        <span class="badge badge-blue">{{ g.deal.stage }}</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            {% for gap_text in g.gaps %}
+                            <span class="badge badge-{% if 'No documents' in gap_text or 'No contacts' in gap_text %}orange{% elif 'No milestones' in gap_text %}yellow{% elif 'No value' in gap_text %}purple{% else %}red{% endif %}" style="font-size: 10px;">
+                                {{ gap_text }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <span style="font-weight: 700; color: var(--{% if g.gap_count >= 4 %}red{% elif g.gap_count >= 2 %}yellow{% else %}green{% endif %});">
+                            {{ g.gap_count }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <h3>No Gaps Detected</h3>
+            <p>All active deals have complete information. Great job!</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if gap_freq %}
+// Gap frequency horizontal bar chart
+const gapLabels = {{ gap_freq|map('first')|list|tojson }};
+const gapCounts = {{ gap_freq|map('last')|list|tojson }};
+const gapColors = gapLabels.map((_, i) => {
+    const colors = ['#f85149', '#f0883e', '#d29922', '#bc8cff', '#58a6ff', '#3fb950', '#8b949e'];
+    return colors[i % colors.length];
+});
+
+new Chart(document.getElementById('gapChart'), {
+    type: 'bar',
+    data: {
+        labels: gapLabels,
+        datasets: [{
+            data: gapCounts,
+            backgroundColor: gapColors,
+            borderColor: gapColors,
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                ticks: {
+                    color: '#8b949e',
+                    stepSize: 1,
+                    callback: v => Number.isInteger(v) ? v : ''
+                },
+                grid: { color: '#30363d' },
+            },
+            y: {
+                ticks: { color: '#e6edf3', font: { size: 12 } },
+                grid: { display: false },
+            }
+        }
+    }
+});
+{% endif %}
+
+{% if gaps %}
+// Severity doughnut
+const severityCounts = {
+    high: {{ gaps|selectattr('severity', 'eq', 'high')|list|length }},
+    medium: {{ gaps|selectattr('severity', 'eq', 'medium')|list|length }},
+    low: {{ gaps|selectattr('severity', 'eq', 'low')|list|length }},
+};
+
+new Chart(document.getElementById('severityChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['High (4+ gaps)', 'Medium (2-3 gaps)', 'Low (1 gap)'],
+        datasets: [{
+            data: [severityCounts.high, severityCounts.medium, severityCounts.low],
+            backgroundColor: ['rgba(248,81,73,.7)', 'rgba(210,153,34,.7)', 'rgba(63,185,80,.7)'],
+            borderColor: '#161b22',
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { color: '#e6edf3', font: { size: 13 }, padding: 16 }
+            }
+        }
+    }
+});
+{% endif %}
+
+// Search filter
+function filterGaps() {
+    const q = document.getElementById('gapSearch').value.toLowerCase();
+    document.querySelectorAll('.gap-row').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

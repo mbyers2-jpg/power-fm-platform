@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}{{ artist_name }} — Song Tracker{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">&larr; Back to Dashboard</a>
+
+<div class="page-header">
+    <h1>{{ artist_name }}</h1>
+    <div class="subtitle">{{ songs|length }} songs in catalog</div>
+</div>
+
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Total Songs</div>
+        <div class="value accent">{{ songs|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Total Revenue</div>
+        <div class="value green">${{ "%.2f"|format(artist_total) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Avg per Song</div>
+        <div class="value purple">${{ "%.2f"|format(artist_total / songs|length if songs|length > 0 else 0) }}</div>
+    </div>
+</div>
+
+{% if songs|length > 0 %}
+<div class="grid-2">
+    <!-- Revenue chart -->
+    <div class="card">
+        <div class="card-header">Revenue by Song</div>
+        <div class="card-body">
+            {% set has_revenue = songs|selectattr('total', 'gt', 0)|list|length > 0 %}
+            {% if has_revenue %}
+            <div class="chart-container">
+                <canvas id="artistChart"></canvas>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>No Revenue Data</h3>
+                <p>Import streaming or royalty data to see revenue breakdown.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Revenue breakdown -->
+    <div class="card">
+        <div class="card-header">Revenue Sources</div>
+        <div class="card-body">
+            {% set total_streaming = songs|sum(attribute='streaming') %}
+            {% set total_radio = songs|sum(attribute='radio') %}
+            {% set total_pro = songs|sum(attribute='pro_royalties') %}
+            {% set total_sync = songs|sum(attribute='sync') %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th class="text-right">Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Streaming</td>
+                        <td class="text-right mono">${{ "%.2f"|format(total_streaming) }}</td>
+                    </tr>
+                    <tr>
+                        <td>Radio</td>
+                        <td class="text-right mono">${{ "%.2f"|format(total_radio) }}</td>
+                    </tr>
+                    <tr>
+                        <td>PRO Royalties</td>
+                        <td class="text-right mono">${{ "%.2f"|format(total_pro) }}</td>
+                    </tr>
+                    <tr>
+                        <td>Sync</td>
+                        <td class="text-right mono">${{ "%.2f"|format(total_sync) }}</td>
+                    </tr>
+                    <tr style="font-weight: 700;">
+                        <td>Total</td>
+                        <td class="text-right mono">${{ "%.2f"|format(artist_total) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Songs Table -->
+<div class="card">
+    <div class="card-header">Songs</div>
+    <div class="card-body" style="padding: 0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-right">Streaming</th>
+                    <th class="text-right">Radio</th>
+                    <th class="text-right">PRO</th>
+                    <th class="text-right">Sync</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in songs|sort(attribute='total', reverse=True) %}
+                <tr>
+                    <td><a href="/song/{{ s.id }}">{{ s.title }}</a></td>
+                    <td class="text-center">
+                        <span class="badge {% if s.status == 'active' %}badge-green{% elif s.status == 'unreleased' %}badge-yellow{% else %}badge-red{% endif %}">
+                            {{ s.status }}
+                        </span>
+                    </td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.streaming) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.radio) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.pro_royalties) }}</td>
+                    <td class="text-right mono">${{ "%.2f"|format(s.sync) }}</td>
+                    <td class="text-right mono" style="font-weight: 600;">${{ "%.2f"|format(s.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% set has_revenue = songs|selectattr('total', 'gt', 0)|list|length > 0 %}
+{% if has_revenue %}
+const songData = {{ songs|tojson }};
+const topSongs = songData.filter(s => s.total > 0).sort((a, b) => b.total - a.total).slice(0, 10);
+
+new Chart(document.getElementById('artistChart'), {
+    type: 'bar',
+    data: {
+        labels: topSongs.map(s => s.title.length > 20 ? s.title.slice(0, 20) + '...' : s.title),
+        datasets: [
+            { label: 'Streaming', data: topSongs.map(s => s.streaming), backgroundColor: '#58a6ff' },
+            { label: 'Radio', data: topSongs.map(s => s.radio), backgroundColor: '#bc8cff' },
+            { label: 'PRO', data: topSongs.map(s => s.pro_royalties), backgroundColor: '#f0883e' },
+            { label: 'Sync', data: topSongs.map(s => s.sync), backgroundColor: '#f778ba' },
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: { stacked: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+            y: {
+                stacked: true,
+                ticks: { color: '#8b949e', callback: v => '$' + v.toFixed(0) },
+                grid: { color: '#30363d' }
+            }
+        },
+        plugins: { legend: { labels: { color: '#e6edf3' } } }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}
