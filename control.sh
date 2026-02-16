@@ -9,7 +9,7 @@
 
 AGENTS_DIR="$HOME/Agents"
 ACTION="${1:-status}"
-ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent n8n secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent platform-hub"
+ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent platform-hub"
 
 case "$ACTION" in
     start)
@@ -33,8 +33,6 @@ case "$ACTION" in
         bash "$AGENTS_DIR/song-tracker/start.sh"
         echo ""
         bash "$AGENTS_DIR/social-media-agent/start.sh"
-        echo ""
-        bash "$AGENTS_DIR/n8n/start.sh"
         echo ""
         bash "$AGENTS_DIR/secure-call/start.sh"
         echo ""
@@ -66,13 +64,7 @@ case "$ACTION" in
         echo "=== Agent Status ==="
         echo ""
         for name in $ALL_AGENTS; do
-            if [ "$name" = "n8n" ]; then
-                if [ -f "$AGENTS_DIR/n8n/n8n.pid" ] && kill -0 $(cat "$AGENTS_DIR/n8n/n8n.pid") 2>/dev/null; then
-                    echo "  n8n: RUNNING (PID $(cat "$AGENTS_DIR/n8n/n8n.pid")) — http://localhost:5678"
-                else
-                    echo "  n8n: STOPPED"
-                fi
-            elif [ "$name" = "secure-call" ]; then
+            if [ "$name" = "secure-call" ]; then
                 if [ -f "$AGENTS_DIR/secure-call/dashboard.pid" ] && kill -0 $(cat "$AGENTS_DIR/secure-call/dashboard.pid") 2>/dev/null; then
                     echo "  secure-call (Ribbon): RUNNING (PID $(cat "$AGENTS_DIR/secure-call/dashboard.pid")) — http://localhost:5558"
                 else
