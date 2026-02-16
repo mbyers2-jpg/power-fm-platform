@@ -9,7 +9,7 @@
 
 AGENTS_DIR="$HOME/Agents"
 ACTION="${1:-status}"
-ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker n8n secure-call"
+ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent n8n secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent platform-hub"
 
 case "$ACTION" in
     start)
@@ -32,9 +32,24 @@ case "$ACTION" in
         echo ""
         bash "$AGENTS_DIR/song-tracker/start.sh"
         echo ""
+        bash "$AGENTS_DIR/social-media-agent/start.sh"
+        echo ""
         bash "$AGENTS_DIR/n8n/start.sh"
         echo ""
         bash "$AGENTS_DIR/secure-call/start.sh"
+        echo ""
+        # Power FM Platform Agents
+        for pfm_agent in chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent; do
+            if ls "$AGENTS_DIR/$pfm_agent/config/"*.json >/dev/null 2>&1; then
+                bash "$AGENTS_DIR/$pfm_agent/start.sh"
+            else
+                echo "[$pfm_agent] Skipped — config not set up yet"
+                echo "  Follow: ~/Agents/$pfm_agent/SETUP.md"
+            fi
+            echo ""
+        done
+        # Platform Hub (no config needed — reads from other agent DBs)
+        bash "$AGENTS_DIR/platform-hub/start.sh"
         echo ""
         echo "All agents started."
         ;;
@@ -83,8 +98,16 @@ case "$ACTION" in
             "$AGENTS_DIR/doc-manager/logs/doc-manager.log" \
             "$AGENTS_DIR/comms-agent/logs/comms-agent.log" \
             "$AGENTS_DIR/research-agent/logs/research-agent.log" \
+            "$AGENTS_DIR/social-media-agent/logs/agent.log" \
             "$AGENTS_DIR/secure-call/logs/dashboard.log" \
             "$AGENTS_DIR/secure-call/logs/sfu.log" \
+            "$AGENTS_DIR/chartmetric-agent/logs/agent.log" \
+            "$AGENTS_DIR/elevenlabs-agent/logs/agent.log" \
+            "$AGENTS_DIR/youtube-agent/logs/agent.log" \
+            "$AGENTS_DIR/icecast-agent/logs/agent.log" \
+            "$AGENTS_DIR/spotify-agent/logs/agent.log" \
+            "$AGENTS_DIR/stripe-agent/logs/agent.log" \
+            "$AGENTS_DIR/platform-hub/logs/agent.log" \
             2>/dev/null
         ;;
 
@@ -115,6 +138,46 @@ case "$ACTION" in
         echo "--- Song Catalog ---"
         latest=$(ls -t "$AGENTS_DIR/song-tracker/reports/"catalog_*.md 2>/dev/null | head -1)
         [ -n "$latest" ] && cat "$latest" || echo "No song catalog report yet."
+        echo ""
+
+        echo "--- Social Media ---"
+        latest=$(ls -t "$AGENTS_DIR/social-media-agent/reports/"engagement_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No social media report yet."
+        echo ""
+
+        echo "--- Power Charts (Chartmetric) ---"
+        latest=$(ls -t "$AGENTS_DIR/chartmetric-agent/reports/"charts_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No charts report yet."
+        echo ""
+
+        echo "--- Localization (ElevenLabs) ---"
+        latest=$(ls -t "$AGENTS_DIR/elevenlabs-agent/reports/"localization_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No localization report yet."
+        echo ""
+
+        echo "--- YouTube ---"
+        latest=$(ls -t "$AGENTS_DIR/youtube-agent/reports/"youtube_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No YouTube report yet."
+        echo ""
+
+        echo "--- Transmitter Network (Icecast) ---"
+        latest=$(ls -t "$AGENTS_DIR/icecast-agent/reports/"transmitter_network_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No transmitter network report yet."
+        echo ""
+
+        echo "--- Spotify ---"
+        latest=$(ls -t "$AGENTS_DIR/spotify-agent/reports/"spotify_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No Spotify report yet."
+        echo ""
+
+        echo "--- Revenue (Stripe) ---"
+        latest=$(ls -t "$AGENTS_DIR/stripe-agent/reports/"revenue_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No revenue report yet."
+        echo ""
+
+        echo "--- Platform Dashboard ---"
+        latest=$(ls -t "$AGENTS_DIR/platform-hub/reports/"platform_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No platform dashboard yet."
         ;;
 
     *)
