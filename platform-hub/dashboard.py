@@ -46,6 +46,7 @@ NAV_HTML = """
     <a href="/shows" class="btn">Shows</a>
     <a href="/admin/schedule" class="btn">Schedule</a>
     <a href="/request" class="btn">Requests</a>
+    <a href="/membership" class="btn">Membership</a>
     <a href="/admin/" class="btn">Admin</a>
 </nav>
 """
@@ -3998,6 +3999,188 @@ def youtube_channel_detail(channel_id):
 
     return render_template_string(YOUTUBE_CHANNEL_DETAIL_TEMPLATE,
         channel=channel, videos=videos, extracted_count=extracted_count)
+
+
+# =====================================================
+# MEMBERSHIP / SUBSCRIPTION PAGE
+# =====================================================
+
+MEMBERSHIP_TEMPLATE = """<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Power FM — Membership</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#eee;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+.hero{text-align:center;padding:60px 20px 30px}
+.hero h1{font-size:42px;font-weight:900;letter-spacing:2px;color:#e94560;margin-bottom:12px}
+.hero p{font-size:18px;color:#aaa;max-width:600px;margin:0 auto}
+.plans{display:flex;justify-content:center;gap:30px;padding:30px 20px 60px;flex-wrap:wrap}
+.plan-card{background:rgba(22,33,62,0.6);backdrop-filter:blur(12px);border:1px solid rgba(233,69,96,0.15);border-radius:20px;padding:40px 32px;width:320px;text-align:center;transition:all .25s ease;position:relative}
+.plan-card:hover{transform:translateY(-6px);border-color:rgba(233,69,96,0.5);box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+.plan-card.recommended{border-color:#e94560;box-shadow:0 0 30px rgba(233,69,96,0.2)}
+.plan-card.recommended::before{content:"RECOMMENDED";position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#e94560;color:#fff;font-size:11px;font-weight:800;padding:4px 18px;border-radius:20px;letter-spacing:1.5px}
+.plan-name{font-size:24px;font-weight:800;margin-bottom:8px;color:#fff}
+.plan-price{font-size:48px;font-weight:900;color:#e94560;margin-bottom:4px}
+.plan-price span{font-size:18px;color:#888;font-weight:400}
+.plan-interval{font-size:14px;color:#666;margin-bottom:24px}
+.features{list-style:none;margin-bottom:32px;text-align:left}
+.features li{padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:14px;color:#ccc}
+.features li::before{content:"✓";color:#e94560;font-weight:700;margin-right:10px}
+.subscribe-btn{display:inline-block;width:100%;padding:14px 32px;background:#e94560;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:1px}
+.subscribe-btn:hover{background:#d63651;transform:scale(1.03)}
+.subscribe-btn:disabled{background:#444;cursor:not-allowed;transform:none}
+.test-badge{display:inline-block;background:rgba(233,69,96,0.15);color:#e94560;font-size:11px;padding:4px 12px;border-radius:8px;margin-top:30px;letter-spacing:1px;font-weight:600}
+.footer-note{text-align:center;padding:0 20px 40px;color:#555;font-size:13px}
+</style>
+</head><body>
+<div class="hero">
+    <h1>POWER FM MEMBERSHIP</h1>
+    <p>Unlock premium radio, exclusive content, and artist access. Choose the plan that fits your vibe.</p>
+    <div class="test-badge">TEST MODE — No real charges</div>
+</div>
+<div class="plans">
+{% for plan in plans %}
+    <div class="plan-card {{ 'recommended' if plan.recommended else '' }}">
+        <div class="plan-name">{{ plan.name }}</div>
+        <div class="plan-price">${{ plan.price }}<span>/mo</span></div>
+        <div class="plan-interval">billed monthly</div>
+        <ul class="features">
+        {% for feature in plan.features %}
+            <li>{{ feature }}</li>
+        {% endfor %}
+        </ul>
+        <button class="subscribe-btn" onclick="subscribe('{{ plan.price_id }}')">Subscribe</button>
+    </div>
+{% endfor %}
+</div>
+<div class="footer-note">
+    Powered by Stripe. Secure payment processing. Cancel anytime.
+</div>
+<script>
+async function subscribe(priceId) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Redirecting...';
+    try {
+        const resp = await fetch('/api/checkout', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({price_id: priceId})
+        });
+        const data = await resp.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            alert(data.error || 'Failed to start checkout');
+            btn.disabled = false;
+            btn.textContent = 'Subscribe';
+        }
+    } catch (err) {
+        alert('Network error — please try again');
+        btn.disabled = false;
+        btn.textContent = 'Subscribe';
+    }
+}
+</script>
+</body></html>"""
+
+# Features for each tier
+PLAN_FEATURES = {
+    'Power FM Basic': [
+        'Live radio streaming',
+        'Standard audio quality',
+        'Weekly playlist updates',
+        'Community chat access',
+    ],
+    'Power FM Pro': [
+        'Everything in Basic',
+        'HD audio streaming',
+        'Early access to new shows',
+        'Exclusive artist interviews',
+        'Ad-free listening',
+    ],
+    'Power FM Premium': [
+        'Everything in Pro',
+        'Ultra HD / lossless audio',
+        'Direct artist Q&A sessions',
+        'Backstage content & stems',
+        'Priority song requests',
+        'VIP event invites',
+    ],
+}
+
+RECOMMENDED_PLAN = 'Power FM Pro'
+
+
+@app.route('/membership')
+def membership():
+    """Public membership page showing subscription plans."""
+    stripe_db = _open_ro(AGENT_DBS.get('stripe', ''))
+    plans = []
+
+    if stripe_db:
+        try:
+            products = _safe_query(stripe_db, """
+                SELECT stripe_id, name, description FROM products
+                WHERE active = 1 ORDER BY name
+            """, default=[])
+
+            for prod in products:
+                prod_dict = dict(prod)
+                price_row = _safe_query(stripe_db, """
+                    SELECT stripe_id, unit_amount_cents FROM prices
+                    WHERE product_id = ? AND active = 1
+                    ORDER BY unit_amount_cents ASC LIMIT 1
+                """, (prod_dict['stripe_id'],), default=[])
+
+                if price_row:
+                    price_data = dict(price_row[0])
+                    amount_cents = price_data.get('unit_amount_cents', 0)
+                    plans.append({
+                        'name': prod_dict['name'],
+                        'description': prod_dict.get('description', ''),
+                        'price': f"{amount_cents / 100:.2f}",
+                        'price_id': price_data['stripe_id'],
+                        'features': PLAN_FEATURES.get(prod_dict['name'], []),
+                        'recommended': prod_dict['name'] == RECOMMENDED_PLAN,
+                    })
+        finally:
+            stripe_db.close()
+
+    # Sort by price ascending
+    plans.sort(key=lambda p: float(p['price']))
+
+    return render_template_string(MEMBERSHIP_TEMPLATE, plans=plans)
+
+
+@app.route('/api/checkout', methods=['POST'])
+def api_checkout():
+    """Create a Stripe Checkout session and return the URL."""
+    import sys
+    stripe_agent_dir = os.path.join(AGENTS_DIR, 'stripe-agent')
+    if stripe_agent_dir not in sys.path:
+        sys.path.insert(0, stripe_agent_dir)
+    from api_client import StripeClient
+
+    body = request.get_json(force=True)
+    price_id = body.get('price_id')
+    if not price_id:
+        return jsonify({'error': 'price_id is required'}), 400
+
+    base_url = request.host_url.rstrip('/')
+    success_url = f"{base_url}/membership?status=success"
+    cancel_url = f"{base_url}/membership?status=cancelled"
+
+    client = StripeClient()
+    if not client.is_configured():
+        return jsonify({'error': 'Stripe is not configured'}), 503
+
+    session = client.create_checkout_session(price_id, success_url, cancel_url)
+    if not session:
+        return jsonify({'error': 'Failed to create checkout session'}), 502
+
+    return jsonify({'url': session.get('url')})
 
 
 def start_dashboard(host='0.0.0.0', port=5560, debug=False):
