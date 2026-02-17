@@ -40,6 +40,7 @@ NAV_HTML = """
     <a href="/" class="btn">Dashboard</a>
     <a href="/#charts" class="btn">Charts</a>
     <a href="/network" class="btn">Network</a>
+    <a href="/transmitters" class="btn">Transmitters</a>
     <a href="/youtube" class="btn">YouTube</a>
     <a href="/artists" class="btn">Artists</a>
     <a href="/station/national" class="btn">Radio</a>
@@ -2989,6 +2990,351 @@ def api_transmitters():
         })
     finally:
         conn.close()
+
+
+# =====================================================
+# TRANSMITTER FLEET PAGE
+# =====================================================
+TRANSMITTERS_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transmitter Fleet - Power FM</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 0 0 60px 0;
+        }
+        .net-header {
+            text-align: center;
+            padding: 48px 20px 32px 20px;
+        }
+        .net-header h1 {
+            font-size: 36px;
+            font-weight: 800;
+            letter-spacing: 4px;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .net-header h1 span { color: #e94560; }
+        .net-header .subtitle {
+            font-size: 14px;
+            color: #8892b0;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        .summary-bar {
+            max-width: 1100px;
+            margin: 0 auto 32px auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+        .summary-item {
+            background: #16213e;
+            border: 1px solid #1a2744;
+            border-radius: 12px;
+            padding: 16px 28px;
+            text-align: center;
+            min-width: 180px;
+        }
+        .summary-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #fff;
+        }
+        .summary-value.all-online { color: #00ff88; }
+        .summary-label {
+            font-size: 11px;
+            color: #8892b0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+        .node-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .node-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 580px) {
+            .node-grid { grid-template-columns: 1fr; }
+        }
+        .ncard {
+            background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+            border: 1px solid #1a2744;
+            border-radius: 16px;
+            padding: 24px 20px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .ncard:hover {
+            border-color: #e94560;
+            box-shadow: 0 4px 20px rgba(233, 69, 96, 0.15);
+        }
+        .ncard-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .ncard-name {
+            font-size: 18px;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+        .ncard-market {
+            font-size: 11px;
+            color: #8892b0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 2px;
+        }
+        .ncard-freq {
+            font-size: 13px;
+            color: #e94560;
+            font-weight: 700;
+        }
+        .ncard-type {
+            font-size: 11px;
+            color: #8892b0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-live { background: #00ff88; box-shadow: 0 0 8px rgba(0, 255, 136, 0.6); }
+        .dot-offline { background: #e94560; box-shadow: 0 0 8px rgba(233, 69, 96, 0.6); }
+        .text-live { color: #00ff88; }
+        .text-offline { color: #e94560; }
+        .ncard-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 14px;
+        }
+        .ncard-heartbeat {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .ncard-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 12px;
+        }
+        .metric {
+            font-size: 12px;
+        }
+        .metric-label {
+            color: #8892b0;
+        }
+        .metric-value {
+            color: #ccd6f6;
+            font-weight: 600;
+        }
+        .alerts-section {
+            max-width: 1100px;
+            margin: 32px auto 0 auto;
+            padding: 0 20px;
+        }
+        .alerts-section h2 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #e94560;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+        .alert-item {
+            background: #16213e;
+            border: 1px solid #1a2744;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .alert-msg { color: #ccd6f6; font-size: 14px; }
+        .alert-sev {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+        .sev-critical { background: #e94560; color: #fff; }
+        .sev-warning { background: #f59e0b; color: #1a1a2e; }
+        .sev-info { background: #3b82f6; color: #fff; }
+        .no-alerts {
+            color: #00ff88;
+            font-size: 14px;
+            padding: 12px 0;
+        }
+        .net-footer {
+            text-align: center;
+            padding: 40px 20px 20px 20px;
+            font-size: 13px;
+            color: #555;
+        }
+        .net-footer a { color: #8892b0; text-decoration: none; }
+        .net-footer a:hover { color: #e94560; }
+    </style>
+</head>
+<body>
+    <div class="net-header">
+        <h1><span>POWER FM</span> TRANSMITTER FLEET</h1>
+        <div class="subtitle">FM Relay Network</div>
+    </div>
+
+    <div class="summary-bar">
+        <div class="summary-item">
+            <div class="summary-value" id="sum-online">--</div>
+            <div class="summary-label">Nodes Online</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-value" id="sum-transmitting">--</div>
+            <div class="summary-label">FM Transmitting</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-value" id="sum-alerts">--</div>
+            <div class="summary-label">Active Alerts</div>
+        </div>
+    </div>
+
+    <div class="node-grid" id="node-grid"></div>
+
+    <div class="alerts-section">
+        <h2>ACTIVE ALERTS</h2>
+        <div id="alerts-list"><span class="no-alerts">Loading...</span></div>
+    </div>
+
+    <div class="net-footer">
+        Powered by <a href="/">Power FM Platform Hub</a>
+    </div>
+
+    <script>
+    function fmtUptime(sec) {
+        if (!sec && sec !== 0) return '--';
+        var d = Math.floor(sec / 86400);
+        var h = Math.floor((sec % 86400) / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
+    }
+
+    function fmtTime(ts) {
+        if (!ts) return '--';
+        var d = new Date(ts);
+        var now = new Date();
+        var diff = Math.floor((now - d) / 1000);
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        return d.toLocaleTimeString();
+    }
+
+    function refreshFleet() {
+        fetch('/api/transmitters')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var nodes = data.nodes || [];
+                var alerts = data.alerts || [];
+                var onlineCount = 0;
+                var txCount = 0;
+                var total = nodes.length;
+
+                var gridHtml = '';
+                nodes.forEach(function(n) {
+                    var isOnline = n.status === 'online';
+                    if (isOnline) onlineCount++;
+                    var hb = n.heartbeat || {};
+                    if (hb.fm_transmitting) txCount++;
+
+                    var dotClass = isOnline ? 'dot-live' : 'dot-offline';
+                    var textClass = isOnline ? 'text-live' : 'text-offline';
+                    var statusLabel = isOnline ? 'ONLINE' : 'OFFLINE';
+
+                    gridHtml += '<div class="ncard">';
+                    gridHtml += '<div class="ncard-top"><div>';
+                    gridHtml += '<div class="ncard-name">' + (n.name || n.node_id) + '</div>';
+                    gridHtml += '<div class="ncard-market">' + (n.market || '--') + '</div>';
+                    gridHtml += '</div><div style="text-align:right">';
+                    gridHtml += '<div class="ncard-freq">' + (n.fm_frequency || '--') + ' MHz</div>';
+                    gridHtml += '<div class="ncard-type">' + (n.transmitter_type || '--') + '</div>';
+                    gridHtml += '</div></div>';
+                    gridHtml += '<div class="ncard-status"><span class="status-dot ' + dotClass + '"></span>';
+                    gridHtml += '<span class="' + textClass + '">' + statusLabel + '</span></div>';
+                    gridHtml += '<div class="ncard-heartbeat">Last heartbeat: ' + fmtTime(n.last_heartbeat) + '</div>';
+                    gridHtml += '<div class="ncard-metrics">';
+                    gridHtml += '<div class="metric"><span class="metric-label">CPU Temp </span><span class="metric-value">' + (hb.cpu_temp != null ? hb.cpu_temp + '°C' : '--') + '</span></div>';
+                    gridHtml += '<div class="metric"><span class="metric-label">Memory </span><span class="metric-value">' + (hb.memory_usage != null ? hb.memory_usage + '%' : '--') + '</span></div>';
+                    gridHtml += '<div class="metric"><span class="metric-label">Uptime </span><span class="metric-value">' + fmtUptime(hb.uptime_seconds) + '</span></div>';
+                    gridHtml += '<div class="metric"><span class="metric-label">Buffer </span><span class="metric-value">' + (hb.buffer_health != null ? hb.buffer_health + '%' : '--') + '</span></div>';
+                    gridHtml += '<div class="metric"><span class="metric-label">Audio </span><span class="metric-value">' + (hb.audio_level != null ? hb.audio_level + ' dB' : '--') + '</span></div>';
+                    gridHtml += '<div class="metric"><span class="metric-label">FM TX </span><span class="metric-value">' + (hb.fm_transmitting ? '<span class="text-live">YES</span>' : '<span class="text-offline">NO</span>') + '</span></div>';
+                    gridHtml += '</div></div>';
+                });
+
+                document.getElementById('node-grid').innerHTML = gridHtml || '<p style="color:#8892b0;text-align:center;grid-column:1/-1">No transmitter nodes registered.</p>';
+
+                var sumEl = document.getElementById('sum-online');
+                sumEl.textContent = onlineCount + '/' + total;
+                sumEl.className = (total > 0 && onlineCount === total) ? 'summary-value all-online' : 'summary-value';
+                document.getElementById('sum-transmitting').textContent = txCount;
+                document.getElementById('sum-alerts').textContent = alerts.length;
+
+                var alertsHtml = '';
+                if (alerts.length === 0) {
+                    alertsHtml = '<div class="no-alerts">No active alerts — all systems nominal.</div>';
+                } else {
+                    alerts.forEach(function(a) {
+                        var sevClass = 'sev-info';
+                        if (a.severity === 'critical') sevClass = 'sev-critical';
+                        else if (a.severity === 'warning') sevClass = 'sev-warning';
+                        alertsHtml += '<div class="alert-item">';
+                        alertsHtml += '<span class="alert-msg">' + (a.message || a.alert_type || 'Alert') + '</span>';
+                        alertsHtml += '<span class="alert-sev ' + sevClass + '">' + (a.severity || 'info') + '</span>';
+                        alertsHtml += '</div>';
+                    });
+                }
+                document.getElementById('alerts-list').innerHTML = alertsHtml;
+            })
+            .catch(function() {
+                document.getElementById('node-grid').innerHTML = '<p style="color:#e94560;text-align:center;grid-column:1/-1">Failed to load transmitter data.</p>';
+            });
+    }
+
+    refreshFleet();
+    setInterval(refreshFleet, 15000);
+    </script>
+</body>
+</html>"""
+
+
+@app.route('/transmitters')
+def transmitters_page():
+    """Public transmitter fleet status page."""
+    return render_template_string(TRANSMITTERS_TEMPLATE)
 
 
 # =====================================================
