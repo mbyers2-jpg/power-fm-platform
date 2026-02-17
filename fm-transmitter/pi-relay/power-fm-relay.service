@@ -1,0 +1,26 @@
+[Unit]
+Description=Power FM Pi Relay — FM Broadcast Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/power-fm-relay
+ExecStart=/home/pi/power-fm-relay/venv/bin/python /home/pi/power-fm-relay/relay.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=80%
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=strict
+ReadWritePaths=/home/pi/power-fm-relay/logs
+
+[Install]
+WantedBy=multi-user.target

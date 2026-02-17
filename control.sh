@@ -9,7 +9,7 @@
 
 AGENTS_DIR="$HOME/Agents"
 ACTION="${1:-status}"
-ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent platform-hub"
+ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent fm-transmitter platform-hub"
 
 case "$ACTION" in
     start)
@@ -37,7 +37,7 @@ case "$ACTION" in
         bash "$AGENTS_DIR/secure-call/start.sh"
         echo ""
         # Power FM Platform Agents
-        for pfm_agent in chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent; do
+        for pfm_agent in chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent fm-transmitter; do
             if ls "$AGENTS_DIR/$pfm_agent/config/"*.json >/dev/null 2>&1; then
                 bash "$AGENTS_DIR/$pfm_agent/start.sh"
             else
@@ -99,6 +99,7 @@ case "$ACTION" in
             "$AGENTS_DIR/icecast-agent/logs/agent.log" \
             "$AGENTS_DIR/spotify-agent/logs/agent.log" \
             "$AGENTS_DIR/stripe-agent/logs/agent.log" \
+            "$AGENTS_DIR/fm-transmitter/logs/agent.log" \
             "$AGENTS_DIR/platform-hub/logs/agent.log" \
             2>/dev/null
         ;;
@@ -165,6 +166,11 @@ case "$ACTION" in
         echo "--- Revenue (Stripe) ---"
         latest=$(ls -t "$AGENTS_DIR/stripe-agent/reports/"revenue_*.md 2>/dev/null | head -1)
         [ -n "$latest" ] && cat "$latest" || echo "No revenue report yet."
+        echo ""
+
+        echo "--- FM Transmitter Fleet ---"
+        latest=$(ls -t "$AGENTS_DIR/fm-transmitter/reports/"fm_fleet_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No FM fleet report yet."
         echo ""
 
         echo "--- Platform Dashboard ---"

@@ -90,6 +90,7 @@ AGENT_DBS = {
     'icecast': os.path.join(AGENTS_DIR, 'icecast-agent', 'data', 'icecast.db'),
     'spotify': os.path.join(AGENTS_DIR, 'spotify-agent', 'data', 'spotify.db'),
     'stripe': os.path.join(AGENTS_DIR, 'stripe-agent', 'data', 'stripe.db'),
+    'fm_transmitter': os.path.join(AGENTS_DIR, 'fm-transmitter', 'data', 'fm_transmitter.db'),
 }
 
 HUB_DB = os.path.join(AGENT_DIR, 'data', 'platform_hub.db')
@@ -102,13 +103,14 @@ AGENT_TABLES = {
     'icecast': ['servers', 'mount_points', 'listeners', 'source_connections', 'stream_health', 'alerts'],
     'spotify': ['artists', 'tracks', 'streams', 'playlists', 'playlist_tracks', 'demographics', 'audio_features'],
     'stripe': ['customers', 'subscriptions', 'payments', 'products', 'prices', 'invoices'],
+    'fm_transmitter': ['nodes', 'heartbeats', 'alerts'],
 }
 
 # Power FM layer mapping
 LAYERS = {
     2: {'name': 'Distribution', 'agents': ['youtube', 'spotify']},
     3: {'name': 'YouTube-to-FM Bridge', 'agents': ['youtube']},
-    4: {'name': 'Transmitter Network', 'agents': ['icecast']},
+    4: {'name': 'Transmitter Network', 'agents': ['icecast', 'fm_transmitter']},
     5: {'name': 'AI Localization', 'agents': ['elevenlabs']},
     7: {'name': 'Power Charts', 'agents': ['chartmetric', 'spotify']},
     8: {'name': 'Subcarrier Paywall', 'agents': ['stripe']},
@@ -2808,6 +2810,185 @@ def api_layers():
         'layers': layer_data,
         'count': len(layer_data),
     })
+
+
+# =====================================================
+# FM TRANSMITTER FLEET API
+# =====================================================
+
+FM_TX_DB = AGENT_DBS['fm_transmitter']
+
+
+def _open_fm_rw():
+    """Open fm_transmitter DB in read-write mode for heartbeat writes."""
+    db_path = FM_TX_DB
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        # Ensure tables exist
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS nodes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_id TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                market TEXT NOT NULL DEFAULT 'national',
+                stream_url TEXT,
+                fm_frequency REAL,
+                transmitter_type TEXT NOT NULL DEFAULT 'simulated',
+                status TEXT DEFAULT 'offline',
+                last_heartbeat TEXT,
+                ip_address TEXT,
+                hardware TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS heartbeats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_id TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ok',
+                stream_connected INTEGER DEFAULT 0,
+                fm_transmitting INTEGER DEFAULT 0,
+                cpu_temp REAL,
+                cpu_usage REAL,
+                memory_usage REAL,
+                uptime_seconds INTEGER DEFAULT 0,
+                buffer_health REAL,
+                audio_level REAL,
+                errors TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (node_id) REFERENCES nodes(node_id)
+            );
+            CREATE TABLE IF NOT EXISTS alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_id TEXT,
+                alert_type TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'info',
+                message TEXT NOT NULL,
+                resolved INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TEXT,
+                FOREIGN KEY (node_id) REFERENCES nodes(node_id)
+            );
+            CREATE TABLE IF NOT EXISTS agent_state (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        return conn
+    except Exception:
+        return None
+
+
+@app.route('/api/transmitters/heartbeat', methods=['POST'])
+def api_transmitter_heartbeat():
+    """POST /api/transmitters/heartbeat — Receive heartbeat from a Pi relay node."""
+    data = request.get_json(silent=True)
+    if not data or 'node_id' not in data:
+        return jsonify({'error': 'node_id required'}), 400
+
+    conn = _open_fm_rw()
+    if not conn:
+        return jsonify({'error': 'database unavailable'}), 500
+
+    try:
+        node_id = data['node_id']
+        now = datetime.utcnow().isoformat()
+        ip_address = request.remote_addr
+
+        # Record heartbeat
+        conn.execute("""
+            INSERT INTO heartbeats (node_id, timestamp, status, stream_connected,
+                fm_transmitting, cpu_temp, cpu_usage, memory_usage, uptime_seconds,
+                buffer_health, audio_level, errors)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            node_id, now,
+            data.get('status', 'ok'),
+            int(data.get('stream_connected', False)),
+            int(data.get('fm_transmitting', False)),
+            data.get('cpu_temp'),
+            data.get('cpu_usage'),
+            data.get('memory_usage'),
+            data.get('uptime_seconds', 0),
+            data.get('buffer_health'),
+            data.get('audio_level'),
+            data.get('errors'),
+        ))
+
+        # Update node status and last heartbeat
+        node_status = 'online' if data.get('status', 'ok') == 'ok' else 'degraded'
+        conn.execute("""
+            UPDATE nodes SET status = ?, last_heartbeat = ?, ip_address = ?, updated_at = ?
+            WHERE node_id = ?
+        """, (node_status, now, ip_address, now, node_id))
+
+        conn.commit()
+        return jsonify({'ok': True, 'timestamp': now})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/transmitters')
+def api_transmitters():
+    """GET /api/transmitters — List all FM relay nodes and their status."""
+    conn = _open_ro(FM_TX_DB)
+    if not conn:
+        return _cors_json({'nodes': [], 'count': 0})
+
+    try:
+        nodes = conn.execute("SELECT * FROM nodes ORDER BY market, name").fetchall()
+        node_list = []
+        for n in nodes:
+            # Get latest heartbeat
+            hb = conn.execute(
+                "SELECT * FROM heartbeats WHERE node_id = ? ORDER BY timestamp DESC LIMIT 1",
+                (n['node_id'],)
+            ).fetchone()
+
+            node_data = {
+                'node_id': n['node_id'],
+                'name': n['name'],
+                'market': n['market'],
+                'fm_frequency': n['fm_frequency'],
+                'transmitter_type': n['transmitter_type'],
+                'status': n['status'],
+                'ip_address': n['ip_address'],
+                'last_heartbeat': n['last_heartbeat'],
+            }
+            if hb:
+                node_data['heartbeat'] = {
+                    'timestamp': hb['timestamp'],
+                    'stream_connected': bool(hb['stream_connected']),
+                    'fm_transmitting': bool(hb['fm_transmitting']),
+                    'cpu_temp': hb['cpu_temp'],
+                    'cpu_usage': hb['cpu_usage'],
+                    'memory_usage': hb['memory_usage'],
+                    'uptime_seconds': hb['uptime_seconds'],
+                    'buffer_health': hb['buffer_health'],
+                    'audio_level': hb['audio_level'],
+                }
+            node_list.append(node_data)
+
+        # Get active alerts
+        alerts = conn.execute(
+            "SELECT * FROM alerts WHERE resolved = 0 ORDER BY severity, created_at DESC"
+        ).fetchall()
+        alert_list = [dict(a) for a in alerts]
+
+        return _cors_json({
+            'nodes': node_list,
+            'count': len(node_list),
+            'alerts': alert_list,
+        })
+    finally:
+        conn.close()
 
 
 # =====================================================

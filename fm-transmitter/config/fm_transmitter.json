@@ -1,0 +1,13 @@
+{
+  "heartbeat_timeout_seconds": 180,
+  "heartbeat_warning_seconds": 120,
+  "max_cpu_temp": 80.0,
+  "max_cpu_usage": 90.0,
+  "poll_interval": 60,
+  "alert_thresholds": {
+    "cpu_temp_warning": 70.0,
+    "cpu_temp_critical": 80.0,
+    "memory_warning": 85.0,
+    "buffer_health_min": 0.5
+  }
+}

@@ -52,13 +52,14 @@ AGENT_DBS = {
     'icecast': os.path.join(AGENTS_DIR, 'icecast-agent', 'data', 'icecast.db'),
     'spotify': os.path.join(AGENTS_DIR, 'spotify-agent', 'data', 'spotify.db'),
     'stripe': os.path.join(AGENTS_DIR, 'stripe-agent', 'data', 'stripe.db'),
+    'fm_transmitter': os.path.join(AGENTS_DIR, 'fm-transmitter', 'data', 'fm_transmitter.db'),
 }
 
 # Power FM layer mapping
 LAYERS = {
     2: {'name': 'Distribution', 'agents': ['youtube', 'spotify']},
     3: {'name': 'YouTube-to-FM Bridge', 'agents': ['youtube']},
-    4: {'name': 'Transmitter Network', 'agents': ['icecast']},
+    4: {'name': 'Transmitter Network', 'agents': ['icecast', 'fm_transmitter']},
     5: {'name': 'AI Localization', 'agents': ['elevenlabs']},
     7: {'name': 'Power Charts', 'agents': ['chartmetric', 'spotify']},
     8: {'name': 'Subcarrier Paywall', 'agents': ['stripe']},
@@ -72,6 +73,7 @@ AGENT_TABLES = {
     'icecast': ['servers', 'mount_points', 'listeners', 'source_connections', 'stream_health', 'alerts'],
     'spotify': ['artists', 'tracks', 'streams', 'playlists', 'playlist_tracks', 'demographics', 'audio_features'],
     'stripe': ['customers', 'subscriptions', 'payments', 'products', 'prices', 'invoices'],
+    'fm_transmitter': ['nodes', 'heartbeats', 'alerts'],
 }
 
 # --- Logging ---
@@ -309,6 +311,24 @@ def collect_metrics(hub_conn):
                     mrr += amount / ic_val
             metrics['mrr_cents'] = int(mrr)
             st_conn.close()
+        except Exception:
+            pass
+
+    # FM Transmitter metrics
+    fm_conn = _open_agent_db(AGENT_DBS['fm_transmitter'])
+    if fm_conn:
+        try:
+            metrics['fm_nodes'] = fm_conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+            metrics['fm_nodes_online'] = fm_conn.execute("SELECT COUNT(*) FROM nodes WHERE status = 'online'").fetchone()[0]
+            # Count nodes currently transmitting FM
+            row = fm_conn.execute("""
+                SELECT COUNT(DISTINCT h.node_id) as transmitting
+                FROM heartbeats h
+                WHERE h.fm_transmitting = 1
+                AND h.id IN (SELECT MAX(id) FROM heartbeats GROUP BY node_id)
+            """).fetchone()
+            metrics['fm_transmitting'] = row['transmitting'] if row and row['transmitting'] else 0
+            fm_conn.close()
         except Exception:
             pass
 
@@ -577,6 +597,13 @@ def generate_report(hub_conn):
     lines.append(f"- Customers: {metrics.get('stripe_customers', 0)}")
     lines.append(f"- Active subscriptions: {metrics.get('active_subscriptions', 0)}")
     lines.append(f"- MRR: ${mrr / 100:,.2f}")
+    lines.append("")
+
+    # FM Transmitter
+    lines.append(f"### FM Transmitter (Layer 4)")
+    lines.append(f"- Relay nodes: {metrics.get('fm_nodes', 0)}")
+    lines.append(f"- Nodes online: {metrics.get('fm_nodes_online', 0)}")
+    lines.append(f"- FM transmitting: {metrics.get('fm_transmitting', 0)}")
     lines.append("")
 
     last_scan = get_agent_state(hub_conn, 'last_scan_timestamp') or 'Never'

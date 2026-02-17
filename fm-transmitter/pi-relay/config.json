@@ -1,0 +1,13 @@
+{
+  "node_id": "sim-01",
+  "stream_url": "http://localhost:8000/stream",
+  "fm_frequency": 88.1,
+  "transmitter_type": "simulated",
+  "hub_url": "http://localhost:5560",
+  "heartbeat_interval": 60,
+  "sample_rate": 48000,
+  "reconnect_delay": 5,
+  "max_reconnect_delay": 60,
+  "chunk_size": 4096,
+  "transmitter_options": {}
+}
