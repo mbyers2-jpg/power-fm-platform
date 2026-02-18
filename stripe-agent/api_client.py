@@ -215,6 +215,64 @@ class StripeClient:
         }
         return self._request('POST', 'checkout/sessions', data=data)
 
+    def create_one_time_checkout(self, product_name, amount_cents, success_url, cancel_url, metadata=None, customer_id=None):
+        """Create a one-time payment Checkout session with inline price_data.
+        When customer_id is provided, attaches payment to that customer.
+        Always sets setup_future_usage so the card is saved for repeat purchases."""
+        data = {
+            'mode': 'payment',
+            'line_items[0][price_data][currency]': 'usd',
+            'line_items[0][price_data][product_data][name]': product_name,
+            'line_items[0][price_data][unit_amount]': amount_cents,
+            'line_items[0][quantity]': 1,
+            'success_url': success_url,
+            'cancel_url': cancel_url,
+            'payment_method_types[0]': 'card',
+            'payment_intent_data[setup_future_usage]': 'on_session',
+        }
+        if customer_id:
+            data['customer'] = customer_id
+        if metadata:
+            for k, v in metadata.items():
+                data[f'metadata[{k}]'] = v
+        return self._request('POST', 'checkout/sessions', data=data)
+
+    def get_checkout_session(self, session_id):
+        """Retrieve a Checkout session by ID for payment verification."""
+        return self._request('GET', f'checkout/sessions/{session_id}')
+
+    # --- Payment Methods ---
+
+    def list_payment_methods(self, customer_id):
+        """List saved card payment methods for a customer."""
+        return self._request('GET', 'payment_methods', params={
+            'customer': customer_id,
+            'type': 'card',
+        })
+
+    # --- Payment Intents ---
+
+    def create_payment_intent(self, amount_cents, customer_id, payment_method_id, description=None, metadata=None):
+        """Create and immediately confirm a PaymentIntent using a saved payment method."""
+        data = {
+            'amount': amount_cents,
+            'currency': 'usd',
+            'customer': customer_id,
+            'payment_method': payment_method_id,
+            'confirm': 'true',
+            'off_session': 'true',
+        }
+        if description:
+            data['description'] = description
+        if metadata:
+            for k, v in metadata.items():
+                data[f'metadata[{k}]'] = v
+        return self._request('POST', 'payment_intents', data=data)
+
+    def get_payment_intent(self, payment_intent_id):
+        """Retrieve a PaymentIntent by ID for verification."""
+        return self._request('GET', f'payment_intents/{payment_intent_id}')
+
     # --- Invoices ---
 
     def list_invoices(self, limit=None):
