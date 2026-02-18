@@ -1375,6 +1375,9 @@ function quickPay(type, tier, tipCents, customerId) {
 }
 
 function openCheckout(type, tier, tipCents) {
+    // Open popup immediately (in click context) so browser doesn't block it
+    const popup = window.open('about:blank', 'stripe_checkout', 'width=500,height=700,scrollbars=yes');
+
     const body = { stream_id: STREAM_ID, type: type };
     if (tier) body.tier = tier;
     if (tipCents) body.amount_cents = tipCents;
@@ -1389,17 +1392,17 @@ function openCheckout(type, tier, tipCents) {
     })
     .then(r => r.json())
     .then(data => {
-        if (data.error) { alert(data.error); return; }
+        if (data.error) { if (popup) popup.close(); alert(data.error); return; }
         // Store customer_id from response (created server-side)
         if (data.customer_id) {
             localStorage.setItem('pfm_customer_id', data.customer_id);
         }
-        // Open Stripe Checkout in popup
-        const popup = window.open(data.checkout_url, 'stripe_checkout', 'width=500,height=700,scrollbars=yes');
+        // Redirect the already-open popup to Stripe Checkout
+        if (popup) popup.location.href = data.checkout_url;
         // Poll localStorage for payment completion
         startPaymentPoll(type, tier, tipCents);
     })
-    .catch(e => alert('Checkout error: ' + e.message));
+    .catch(e => { if (popup) popup.close(); alert('Checkout error: ' + e.message); });
 }
 
 function startPaymentPoll(type, tier, tipCents) {
