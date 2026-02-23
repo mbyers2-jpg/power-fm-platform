@@ -289,7 +289,7 @@ AGENT_REGISTRY = [
     ('sync-pitch-agent', 'pid_file', None, 'sync_pitch.db', 'agent.log', 3600),
     ('sync-legal-agent', 'pid_file', None, 'sync_legal.db', 'agent.log', 3600),
     ('sync-revenue-agent', 'pid_file', None, 'sync_revenue.db', 'agent.log', 3600),
-    ('sync-hub-agent', 'pid_file', 5550, 'sync_hub.db', 'agent.log', 300),
+    ('sync-hub-agent', 'pid_file', None, 'sync_hub.db', 'agent.log', 300),
     ('ad-royalty-agent', 'launchd', None, 'ad_royalty.db', 'agent.log', 86400),
     ('ptc-payout-agent', 'launchd', None, 'payouts.db', 'agent.log', 86400),
     ('ptc-accounting-agent', 'launchd', None, 'accounting.db', 'agent.log', 86400),
