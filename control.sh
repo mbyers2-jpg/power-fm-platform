@@ -9,7 +9,7 @@
 
 AGENTS_DIR="$HOME/Agents"
 ACTION="${1:-status}"
-ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent fm-transmitter platform-hub"
+ALL_AGENTS="email-agent deal-tracker doc-manager comms-agent research-agent song-tracker social-media-agent secure-call chartmetric-agent elevenlabs-agent youtube-agent icecast-agent spotify-agent stripe-agent fm-transmitter platform-hub sync-contacts-agent sync-briefs-agent sync-pitch-agent sync-legal-agent sync-revenue-agent sync-hub-agent ad-royalty-agent ptc-payout-agent ptc-accounting-agent monitor-agent"
 
 case "$ACTION" in
     start)
@@ -49,6 +49,29 @@ case "$ACTION" in
         # Platform Hub (no config needed — reads from other agent DBs)
         bash "$AGENTS_DIR/platform-hub/start.sh"
         echo ""
+        # Sync Licensing Platform Agents
+        echo "=== Sync Licensing Platform ==="
+        for sync_agent in sync-contacts-agent sync-briefs-agent sync-pitch-agent sync-legal-agent sync-revenue-agent; do
+            bash "$AGENTS_DIR/$sync_agent/start.sh"
+            echo ""
+        done
+        # Sync Hub (orchestrator — start last, reads all other sync DBs)
+        bash "$AGENTS_DIR/sync-hub-agent/start.sh"
+        echo ""
+        # Business Operations Agents (Layer 10)
+        echo "=== Business Operations ==="
+        for biz_agent in ad-royalty-agent ptc-payout-agent ptc-accounting-agent; do
+            if ls "$AGENTS_DIR/$biz_agent/config/"*.json >/dev/null 2>&1; then
+                bash "$AGENTS_DIR/$biz_agent/start.sh"
+            else
+                echo "[$biz_agent] Skipped — config not set up yet"
+            fi
+            echo ""
+        done
+        # Monitor Agent (start last — monitors everything else)
+        echo "=== System Monitor ==="
+        bash "$AGENTS_DIR/monitor-agent/start.sh"
+        echo ""
         echo "All agents started."
         ;;
 
@@ -75,7 +98,13 @@ case "$ACTION" in
                 if [ -n "$pid" ] && [ "$pid" != "-" ]; then
                     echo "  $name: RUNNING (PID $pid)"
                 else
-                    echo "  $name: STOPPED"
+                    # Fallback: check PID file
+                    pidfile="$AGENTS_DIR/$name/$name.pid"
+                    if [ -f "$pidfile" ] && kill -0 $(cat "$pidfile") 2>/dev/null; then
+                        echo "  $name: RUNNING (PID $(cat "$pidfile"))"
+                    else
+                        echo "  $name: STOPPED"
+                    fi
                 fi
             fi
         done
@@ -101,6 +130,16 @@ case "$ACTION" in
             "$AGENTS_DIR/stripe-agent/logs/agent.log" \
             "$AGENTS_DIR/fm-transmitter/logs/agent.log" \
             "$AGENTS_DIR/platform-hub/logs/agent.log" \
+            "$AGENTS_DIR/sync-contacts-agent/logs/agent.log" \
+            "$AGENTS_DIR/sync-briefs-agent/logs/agent.log" \
+            "$AGENTS_DIR/sync-pitch-agent/logs/agent.log" \
+            "$AGENTS_DIR/sync-legal-agent/logs/agent.log" \
+            "$AGENTS_DIR/sync-revenue-agent/logs/agent.log" \
+            "$AGENTS_DIR/sync-hub-agent/logs/agent.log" \
+            "$AGENTS_DIR/ad-royalty-agent/logs/agent.log" \
+            "$AGENTS_DIR/ptc-payout-agent/logs/agent.log" \
+            "$AGENTS_DIR/ptc-accounting-agent/logs/agent.log" \
+            "$AGENTS_DIR/monitor-agent/logs/agent.log" \
             2>/dev/null
         ;;
 
@@ -176,6 +215,57 @@ case "$ACTION" in
         echo "--- Platform Dashboard ---"
         latest=$(ls -t "$AGENTS_DIR/platform-hub/reports/"platform_*.md 2>/dev/null | head -1)
         [ -n "$latest" ] && cat "$latest" || echo "No platform dashboard yet."
+        echo ""
+
+        echo "--- Sync Contacts ---"
+        latest=$(ls -t "$AGENTS_DIR/sync-contacts-agent/reports/"contacts_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No sync contacts report yet."
+        echo ""
+
+        echo "--- Sync Opportunities ---"
+        latest=$(ls -t "$AGENTS_DIR/sync-briefs-agent/reports/"briefs_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No sync briefs report yet."
+        echo ""
+
+        echo "--- Sync Pitches ---"
+        latest=$(ls -t "$AGENTS_DIR/sync-pitch-agent/reports/"pitch_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No sync pitch report yet."
+        echo ""
+
+        echo "--- Sync Deals ---"
+        latest=$(ls -t "$AGENTS_DIR/sync-legal-agent/reports/"deals_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No sync deals report yet."
+        echo ""
+
+        echo "--- Sync Revenue ---"
+        latest=$(ls -t "$AGENTS_DIR/sync-revenue-agent/reports/"revenue_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No sync revenue report yet."
+        echo ""
+
+        echo "--- Sync Pipeline ---"
+        latest=$(ls -t "$AGENTS_DIR/sync-hub-agent/reports/"sync_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No sync pipeline report yet."
+        echo ""
+
+        echo "--- Ad Royalties ---"
+        latest=$(ls -t "$AGENTS_DIR/ad-royalty-agent/reports/"royalty_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No ad royalty report yet."
+        echo ""
+
+        echo "--- Payouts ---"
+        latest=$(ls -t "$AGENTS_DIR/ptc-payout-agent/reports/"payout_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No payout report yet."
+        echo ""
+
+        echo "--- Accounting ---"
+        latest=$(ls -t "$AGENTS_DIR/ptc-accounting-agent/reports/"accounting_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No accounting report yet."
+        echo ""
+
+        echo "--- System Health ---"
+        latest=$(ls -t "$AGENTS_DIR/monitor-agent/reports/"health_*.md 2>/dev/null | head -1)
+        [ -n "$latest" ] && cat "$latest" || echo "No health report yet."
+        echo ""
         ;;
 
     *)

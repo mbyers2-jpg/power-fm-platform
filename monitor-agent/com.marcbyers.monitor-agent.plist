@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.marcbyers.monitor-agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/marcbyers/Agents/monitor-agent/venv/bin/python</string>
+        <string>/Users/marcbyers/Agents/monitor-agent/agent.py</string>
+        <string>--daemon</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/marcbyers/Agents/monitor-agent</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/marcbyers/Agents/monitor-agent/logs/stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/marcbyers/Agents/monitor-agent/logs/stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin</string>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+</dict>
+</plist>
