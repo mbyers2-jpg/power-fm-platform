@@ -86,6 +86,30 @@ case "$ACTION" in
     status)
         echo "=== Agent Status ==="
         echo ""
+        # Build CWD-based PID map for background daemon processes
+        # (agents launched with 'cd $DIR && python agent.py --daemon &')
+        CWD_PID_MAP=""
+        daemon_pids=$(/usr/bin/pgrep -f "agent.py --daemon" 2>/dev/null | tr '\n' ',')
+        if [ -n "$daemon_pids" ]; then
+            daemon_pids="${daemon_pids%,}"
+            current_pid=""
+            while IFS= read -r line; do
+                case "$line" in
+                    p*) current_pid="${line#p}" ;;
+                    n*)
+                        cwd="${line#n}"
+                        # Extract agent name — must be a direct child of Agents/
+                        agent_name=$(echo "$cwd" | sed -n "s|.*/Agents/\([^/]*\)$|\1|p")
+                        if [ -n "$agent_name" ]; then
+                            CWD_PID_MAP="$CWD_PID_MAP $agent_name:$current_pid"
+                        fi
+                        ;;
+                esac
+            done <<EOF
+$(/usr/sbin/lsof -a -d cwd -p "$daemon_pids" -Fn 2>/dev/null)
+EOF
+        fi
+
         for name in $ALL_AGENTS; do
             if [ "$name" = "secure-call" ]; then
                 if [ -f "$AGENTS_DIR/secure-call/dashboard.pid" ] && kill -0 $(cat "$AGENTS_DIR/secure-call/dashboard.pid") 2>/dev/null; then
@@ -102,6 +126,9 @@ case "$ACTION" in
                     pidfile="$AGENTS_DIR/$name/$name.pid"
                     if [ -f "$pidfile" ] && kill -0 $(cat "$pidfile") 2>/dev/null; then
                         echo "  $name: RUNNING (PID $(cat "$pidfile"))"
+                    # Fallback: check CWD-based map (background process agents)
+                    elif cwd_pid=$(echo "$CWD_PID_MAP" | tr ' ' '\n' | grep "^$name:" | head -1 | cut -d: -f2) && [ -n "$cwd_pid" ] && kill -0 "$cwd_pid" 2>/dev/null; then
+                        echo "  $name: RUNNING (PID $cwd_pid)"
                     else
                         echo "  $name: STOPPED"
                     fi
